@@ -14,7 +14,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
 } from "react-native-reanimated";
-import { Colors } from "../constants/theme";
+import { Colors, FontFamily } from "../constants/theme";
 import { ChevronRight } from "lucide-react-native";
 
 interface NeoCardProps extends TouchableOpacityProps {
@@ -121,10 +121,10 @@ export const NeoCard: React.FC<NeoCardProps> = ({
               style={[
                 {
                   fontSize: 16,
-                  fontWeight: "900",
                   color: vStyle.text,
                   letterSpacing: 0.5,
                   marginBottom: 4,
+                  fontFamily: FontFamily.title,
                 },
                 titleStyle,
               ]}
@@ -138,7 +138,7 @@ export const NeoCard: React.FC<NeoCardProps> = ({
                     fontSize: 12,
                     color: vStyle.text,
                     lineHeight: 16,
-                    fontFamily: "Courier",
+                    fontFamily: FontFamily.mono,
                   },
                   descriptionStyle,
                 ]}

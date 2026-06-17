@@ -14,7 +14,7 @@ import Animated, {
     withTiming,
     interpolateColor,
 } from "react-native-reanimated";
-import { Colors } from "../constants/theme";
+import { Colors, FontFamily } from "../constants/theme";
 
 interface NeoButtonProps extends TouchableOpacityProps {
     label: string;
@@ -143,6 +143,7 @@ export const NeoButton: React.FC<NeoButtonProps> = ({
                                 fontSize: sStyle.fontSize,
                                 color: disabled ? Colors.grayDark : vStyle.text,
                                 fontWeight: "bold",
+                                fontFamily: FontFamily.title,
                             },
                             textStyle,
                         ]}

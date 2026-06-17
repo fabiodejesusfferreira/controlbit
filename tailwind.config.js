@@ -9,7 +9,14 @@ module.exports = {
   ],
   presets: [require("nativewind/preset")],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        title: ["SpaceGrotesk-Bold"],
+        medium: ["SpaceGrotesk-Medium"],
+        mono: ["SpaceMono-Regular"],
+        "mono-bold": ["SpaceMono-Bold"],
+      }
+    },
   },
   plugins: [],
 }

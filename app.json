@@ -3,12 +3,16 @@
     "name": "controlbit",
     "slug": "controlbit",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.dejesusdev.controlbit"
+      "bundleIdentifier": "com.dejesusdev.controlbit",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "O ControlBit precisa do Bluetooth para se comunicar com o micro:bit.",
+        "NSBluetoothPeripheralUsageDescription": "O ControlBit precisa do Bluetooth para se comunicar com o micro:bit."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,11 +22,42 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.dejesusdev.controlbit"
+      "package": "com.dejesusdev.controlbit",
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
-    }
+    },
+    "plugins": [
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/SpaceGrotesk-Bold.ttf",
+            "./assets/fonts/SpaceGrotesk-Medium.ttf",
+            "./assets/fonts/SpaceMono-Regular.ttf",
+            "./assets/fonts/SpaceMono-BoldItalic.ttf"
+          ]
+        }
+      ],
+      "expo-splash-screen",
+      "expo-screen-orientation",
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": ["peripheral", "central"],
+          "bluetoothAlwaysPermission": "O ControlBit precisa do Bluetooth para se comunicar com o micro:bit."
+        }
+      ]
+    ]
   }
 }

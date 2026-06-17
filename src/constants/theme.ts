@@ -15,16 +15,6 @@ export const Colors = {
     pink: "#EC4899",
 } as const;
 
-export const ButtonColors = [
-    Colors.yellow,
-    Colors.green,
-    Colors.primary,
-    Colors.purple,
-    Colors.orange,
-    Colors.danger,
-    Colors.cyan,
-    Colors.pink,
-];
 
 export const BorderWidth = {
     neo: 3,
@@ -46,4 +36,11 @@ export const Shadow = {
         shadowRadius: 0,
         elevation: 6,
     },
+};
+
+export const FontFamily = {
+    title: "SpaceGrotesk-Bold",
+    medium: "SpaceGrotesk-Medium",
+    mono: "SpaceMono-Regular",
+    monoBold: "SpaceMono-Bold",
 };
