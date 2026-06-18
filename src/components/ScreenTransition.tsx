@@ -10,35 +10,37 @@ import Animated, {
 interface ScreenTransitionProps {
     children: React.ReactNode;
     /**
-     * Duration em milissegundos. Padrão: 300ms
+     * Duration em milissegundos. Padrão: 220ms
      */
     duration?: number;
     /**
-     * Deslocamento vertical inicial (slide-up). Padrão: 24
+     * Deslocamento vertical inicial (slide-up). Padrão: 10
      */
     slideOffset?: number;
 }
 
 /**
  * Envolve qualquer tela e aplica uma animação de entrada suave
- * (fade + deslize para cima) sempre que o componente é montado.
+ * (fade sutil + deslize mínimo). Começa em 0.85 de opacidade para
+ * evitar o flash de tela branca perceptível nas tabs.
  */
 export function ScreenTransition({
     children,
-    duration = 300,
-    slideOffset = 24,
+    duration = 220,
+    slideOffset = 10,
 }: ScreenTransitionProps) {
-    const opacity = useSharedValue(0);
+    // Começa quase visível — elimina o flash branco ao trocar tabs
+    const opacity = useSharedValue(0.85);
     const translateY = useSharedValue(slideOffset);
 
     useEffect(() => {
         opacity.value = withTiming(1, {
             duration,
-            easing: Easing.out(Easing.cubic),
+            easing: Easing.out(Easing.quad),
         });
         translateY.value = withTiming(0, {
             duration,
-            easing: Easing.out(Easing.cubic),
+            easing: Easing.out(Easing.quad),
         });
     }, []);
 

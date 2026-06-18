@@ -1,18 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef, memo } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   ScrollView,
+  StyleSheet,
+  useWindowDimensions,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { Trash2, Check, Edit3 } from 'lucide-react-native';
+import { Trash2, Check, X } from 'lucide-react-native';
 import { ControlButton } from '../../types/control.types';
-import { Icon, BUTTON_COLORS } from '../../utils/iconMap';
+import { Icon } from '../../utils/iconMap';
 import IconPickerModal from '../../components/IconPickerModal';
-import { Colors, FontFamily, Shadow } from '../../constants/theme';
+import { Colors, FontFamily } from '../../constants/theme';
+
+const PICKER_COLORS = [
+  '#FFD82D', '#22C55E', '#3B82F6', '#A855F7', '#F97316',
+  '#E81C1C', '#06B6D4', '#EC4899',
+];
+
+const LIGHT_COLORS = new Set([
+  '#FFD82D', '#22C55E', '#06B6D4', '#FFFFFF', '#F5F0E8',
+]);
 
 interface Props {
   button: ControlButton;
@@ -21,51 +31,82 @@ interface Props {
   onClose: () => void;
 }
 
-export default function ButtonFormPanel({
-  button,
-  onChange,
-  onDelete,
-  onClose,
-}: Props) {
+function ButtonFormPanel({ button, onChange, onDelete, onClose }: Props) {
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
   const [showIconPicker, setShowIconPicker] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState(false);
-  const [size, setSize] = useState(button.size ?? 80);
+  // Estado local do tamanho — só chama onChange no SlidingComplete
+  const [localSize, setLocalSize] = useState(button.size ?? 120);
+  // Ref do botão local — evita closures stale no Slider
+  const buttonRef = useRef(button);
+  buttonRef.current = button;
 
-  const update = (field: keyof ControlButton, value: string | number) => {
-    onChange({ ...button, [field]: value });
-  };
-
-  const handleSizeComplete = (v: number) => {
-    const rounded = Math.round(v / 5) * 5;
-    setSize(rounded);
-    update('size', rounded);
-  };
-
-  const textColor = ['#FFE500', '#FFFFFF', '#F5F0E8', '#00D9F5', '#00C851'].includes(
-    button.color ?? '',
-  )
+  const textColor = LIGHT_COLORS.has(button.color ?? '')
     ? Colors.dark
     : '#fff';
 
+  // Atualiza campo e notifica pai — useCallback para não recriar a cada render
+  const update = useCallback(
+    (field: keyof ControlButton, value: string | number) => {
+      onChange({ ...buttonRef.current, [field]: value });
+    },
+    [onChange],
+  );
+
+  const handleIconSelect = useCallback(
+    (icon: string) => {
+      update('icon', icon);
+      setShowIconPicker(false);
+    },
+    [update],
+  );
+
+  const handleColorSelect = useCallback(
+    (c: string) => update('color', c),
+    [update],
+  );
+
+  const handleLabelChange = useCallback(
+    (v: string) => update('label', v),
+    [update],
+  );
+
+  const handleCommandChange = useCallback(
+    (v: string) => update('command', v),
+    [update],
+  );
+
+  const handleSliderChange = useCallback((v: number) => {
+    setLocalSize(Math.round(v / 5) * 5);
+  }, []);
+
+  const handleSliderComplete = useCallback(
+    (v: number) => {
+      const rounded = Math.round(v / 5) * 5;
+      setLocalSize(rounded);
+      update('size', rounded);
+    },
+    [update],
+  );
+
   return (
-    <View style={[styles.panel, Shadow.neo]}>
-      {/* Header */}
-      <View style={styles.panelHeader}>
-        <Text style={styles.panelTitle}>EDITAR BOTÃO</Text>
-        <View style={styles.panelActions}>
+    <View>
+      {/* Drag handle */}
+      <View style={styles.handleWrap}>
+        <View style={styles.handle} />
+      </View>
+
+      {/* Título + fechar */}
+      <View style={styles.titleRow}>
+        <Text style={styles.title}>Editar Botão</Text>
+        <View style={{ position: 'relative' }}>
+          <View style={styles.closeShadow} />
           <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: '#FF2D2D' }, Shadow.neoSmall]}
-            onPress={onDelete}
-            activeOpacity={0.8}
-          >
-            <Trash2 size={13} color="#fff" strokeWidth={2.5} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: '#00C851' }, Shadow.neoSmall]}
+            style={styles.closeBtn}
             onPress={onClose}
             activeOpacity={0.8}
           >
-            <Check size={13} color="#fff" strokeWidth={2.5} />
+            <X size={18} color={Colors.dark} strokeWidth={3} />
           </TouchableOpacity>
         </View>
       </View>
@@ -76,127 +117,274 @@ export default function ButtonFormPanel({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Ícone + cor */}
-        <View style={styles.row}>
-          <TouchableOpacity
-            style={[styles.iconPickerBtn, Shadow.neoSmall]}
-            onPress={() => setShowIconPicker(true)}
-            activeOpacity={0.85}
-          >
-            <Icon name={button.icon} size={16} color={Colors.dark} />
-            <Text style={styles.iconLabel} numberOfLines={1}>
-              {button.icon}
-            </Text>
-            <Edit3 size={12} color="#999" strokeWidth={2} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.colorSwatch,
-              {
-                backgroundColor: button.color ?? '#FFE500',
-              },
-              Shadow.neoSmall,
-            ]}
-            onPress={() => setShowColorPicker(!showColorPicker)}
-          />
-        </View>
-
-        {/* Color picker */}
-        {showColorPicker && (
-          <View style={styles.colorGrid}>
-            {BUTTON_COLORS.map((c) => (
+        {isLandscape ? (
+          // ── Layout landscape: ícone+cores à esquerda | campos à direita ──
+          <View style={styles.landscapeBody}>
+            {/* Coluna esquerda: preview + grade de cores */}
+            <View style={styles.landscapeLeft}>
+              {/* Preview */}
               <TouchableOpacity
-                key={c}
-                style={[
-                  styles.colorCell,
-                  { backgroundColor: c },
-                  button.color === c && styles.colorCellActive,
-                ]}
-                onPress={() => {
-                  update('color', c);
-                  setShowColorPicker(false);
-                }}
+                onPress={() => setShowIconPicker(true)}
+                activeOpacity={0.85}
+                style={{ position: 'relative', alignSelf: 'center' }}
+              >
+                <View style={styles.previewShadow} />
+                <View
+                  style={[
+                    styles.previewBox,
+                    { backgroundColor: button.color ?? '#FFD82D' },
+                  ]}
+                >
+                  <Icon name={button.icon} size={36} color={textColor} />
+                </View>
+              </TouchableOpacity>
+
+              {/* Grade de cores */}
+              <View style={styles.colorGrid}>
+                {PICKER_COLORS.map((c) => {
+                  const isSelected = button.color === c;
+                  return (
+                    <TouchableOpacity
+                      key={c}
+                      onPress={() => handleColorSelect(c)}
+                      activeOpacity={0.8}
+                      style={{ position: 'relative' }}
+                    >
+                      {isSelected && <View style={styles.colorShadow} />}
+                      <View
+                        style={[
+                          styles.colorCell,
+                          {
+                            backgroundColor: c,
+                            borderWidth:  isSelected ? 3 : 2,
+                            borderColor:  isSelected ? Colors.dark : '#ccc',
+                          },
+                        ]}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Coluna direita: campos NOME, COMANDO, TAMANHO e ações */}
+            <View style={styles.landscapeRight}>
+              {/* NOME */}
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>NOME</Text>
+                <TextInput
+                  style={styles.input}
+                  value={button.label}
+                  onChangeText={handleLabelChange}
+                  placeholder="Ex: Frente"
+                  placeholderTextColor="#bbb"
+                  maxLength={20}
+                />
+              </View>
+
+              {/* COMANDO */}
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>COMANDO</Text>
+                <TextInput
+                  style={styles.input}
+                  value={button.command}
+                  onChangeText={handleCommandChange}
+                  placeholder="Ex: up, motor_on, c90"
+                  placeholderTextColor="#bbb"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  maxLength={32}
+                />
+              </View>
+
+              {/* TAMANHO */}
+              <View style={styles.field}>
+                <View style={styles.fieldHeader}>
+                  <Text style={styles.fieldLabel}>TAMANHO</Text>
+                  <View style={{ position: 'relative' }}>
+                    <View style={styles.badgeShadow} />
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{localSize}px</Text>
+                    </View>
+                  </View>
+                </View>
+                <Slider
+                  minimumValue={60}
+                  maximumValue={200}
+                  step={5}
+                  value={localSize}
+                  onValueChange={handleSliderChange}
+                  onSlidingComplete={handleSliderComplete}
+                  minimumTrackTintColor="#E81C1C"
+                  maximumTrackTintColor="#D9D4CA"
+                  thumbTintColor="#E81C1C"
+                />
+              </View>
+
+              {/* EXCLUIR + SALVAR */}
+              <View style={styles.actionsRow}>
+                <View style={{ flex: 1, position: 'relative' }}>
+                  <View style={[styles.btnShadow, { backgroundColor: Colors.dark }]} />
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: '#E81C1C' }]}
+                    onPress={onDelete}
+                    activeOpacity={0.85}
+                  >
+                    <Trash2 size={16} color="#fff" strokeWidth={2.5} />
+                    <Text style={styles.actionText}>EXCLUIR</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={{ flex: 1, position: 'relative' }}>
+                  <View style={[styles.btnShadow, { backgroundColor: Colors.dark }]} />
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: '#22C55E' }]}
+                    onPress={onClose}
+                    activeOpacity={0.85}
+                  >
+                    <Check size={16} color="#fff" strokeWidth={3} />
+                    <Text style={styles.actionText}>SALVAR</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        ) : (
+          // ── Layout portrait: coluna única original ──
+          <>
+            {/* Preview + cores */}
+            <View style={styles.row}>
+              {/* Preview — toque abre icon picker */}
+              <TouchableOpacity
+                onPress={() => setShowIconPicker(true)}
+                activeOpacity={0.85}
+                style={{ position: 'relative' }}
+              >
+                <View style={styles.previewShadow} />
+                <View
+                  style={[
+                    styles.previewBox,
+                    { backgroundColor: button.color ?? '#FFD82D' },
+                  ]}
+                >
+                  <Icon name={button.icon} size={36} color={textColor} />
+                </View>
+              </TouchableOpacity>
+
+              {/* Grade de cores */}
+              <View style={styles.colorGrid}>
+                {PICKER_COLORS.map((c) => {
+                  const isSelected = button.color === c;
+                  return (
+                    <TouchableOpacity
+                      key={c}
+                      onPress={() => handleColorSelect(c)}
+                      activeOpacity={0.8}
+                      style={{ position: 'relative' }}
+                    >
+                      {isSelected && <View style={styles.colorShadow} />}
+                      <View
+                        style={[
+                          styles.colorCell,
+                          {
+                            backgroundColor: c,
+                            borderWidth:  isSelected ? 3 : 2,
+                            borderColor:  isSelected ? Colors.dark : '#ccc',
+                          },
+                        ]}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* NOME */}
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>NOME</Text>
+              <TextInput
+                style={styles.input}
+                value={button.label}
+                onChangeText={handleLabelChange}
+                placeholder="Ex: Frente"
+                placeholderTextColor="#bbb"
+                maxLength={20}
               />
-            ))}
-          </View>
+            </View>
+
+            {/* COMANDO */}
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>COMANDO</Text>
+              <TextInput
+                style={styles.input}
+                value={button.command}
+                onChangeText={handleCommandChange}
+                placeholder="Ex: up, motor_on, c90"
+                placeholderTextColor="#bbb"
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={32}
+              />
+            </View>
+
+            {/* TAMANHO */}
+            <View style={styles.field}>
+              <View style={styles.fieldHeader}>
+                <Text style={styles.fieldLabel}>TAMANHO</Text>
+                <View style={{ position: 'relative' }}>
+                  <View style={styles.badgeShadow} />
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{localSize}px</Text>
+                  </View>
+                </View>
+              </View>
+              <Slider
+                minimumValue={60}
+                maximumValue={200}
+                step={5}
+                value={localSize}
+                onValueChange={handleSliderChange}
+                onSlidingComplete={handleSliderComplete}
+                minimumTrackTintColor="#E81C1C"
+                maximumTrackTintColor="#D9D4CA"
+                thumbTintColor="#E81C1C"
+              />
+            </View>
+
+            {/* EXCLUIR + SALVAR */}
+            <View style={styles.actionsRow}>
+              <View style={{ flex: 1, position: 'relative' }}>
+                <View style={[styles.btnShadow, { backgroundColor: Colors.dark }]} />
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: '#E81C1C' }]}
+                  onPress={onDelete}
+                  activeOpacity={0.85}
+                >
+                  <Trash2 size={16} color="#fff" strokeWidth={2.5} />
+                  <Text style={styles.actionText}>EXCLUIR</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ flex: 1, position: 'relative' }}>
+                <View style={[styles.btnShadow, { backgroundColor: Colors.dark }]} />
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: '#22C55E' }]}
+                  onPress={onClose}
+                  activeOpacity={0.85}
+                >
+                  <Check size={16} color="#fff" strokeWidth={3} />
+                  <Text style={styles.actionText}>SALVAR</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </>
         )}
-
-        {/* Label */}
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>LABEL</Text>
-          <TextInput
-            style={styles.textInput}
-            value={button.label}
-            onChangeText={(v) => update('label', v)}
-            placeholder="Ex: Frente"
-            placeholderTextColor="#bbb"
-          />
-        </View>
-
-        {/* Comando */}
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>COMANDO BLE</Text>
-          <TextInput
-            style={[styles.textInput, styles.cmdInput]}
-            value={button.command}
-            onChangeText={(v) => update('command', v)}
-            placeholder="Ex: up, motor_on, c90"
-            placeholderTextColor="#555"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </View>
-
-        {/* Tamanho */}
-        <View style={styles.field}>
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>TAMANHO</Text>
-            <Text style={styles.fieldValue}>{size}dp</Text>
-          </View>
-          <Slider
-            minimumValue={50}
-            maximumValue={180}
-            step={5}
-            value={size}
-            onValueChange={(v) => setSize(Math.round(v / 5) * 5)}
-            onSlidingComplete={handleSizeComplete}
-            minimumTrackTintColor={button.color ?? '#FFE500'}
-            maximumTrackTintColor="#ccc"
-            thumbTintColor={button.color ?? '#FFE500'}
-          />
-        </View>
-
-        {/* Preview */}
-        <View style={styles.preview}>
-          <View
-            style={[
-              styles.previewBtn,
-              {
-                width: Math.min(80, Math.max(36, size * 0.6)),
-                height: Math.min(80, Math.max(36, size * 0.6)),
-                backgroundColor: button.color ?? '#FFE500',
-              },
-              Shadow.neoSmall,
-            ]}
-          >
-            <Icon
-              name={button.icon}
-              size={Math.min(24, Math.round(size * 0.2))}
-              color={textColor}
-            />
-          </View>
-          <View style={styles.previewInfo}>
-            <Text style={styles.previewName}>{button.label || '—'}</Text>
-            <Text style={styles.previewCmd}>TX: "{button.command}"</Text>
-          </View>
-        </View>
       </ScrollView>
 
       {showIconPicker && (
         <IconPickerModal
           selected={button.icon}
-          onSelect={(icon) => update('icon', icon)}
+          onSelect={handleIconSelect}
           onClose={() => setShowIconPicker(false)}
         />
       )}
@@ -204,147 +392,168 @@ export default function ButtonFormPanel({
   );
 }
 
+export default memo(ButtonFormPanel);
+
 const styles = StyleSheet.create({
-  panel: {
-    backgroundColor: Colors.bg,
+  handleWrap: {
+    alignItems: 'center',
+    paddingTop: 12,
+    paddingBottom: 4,
   },
-  panelHeader: {
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#ccc',
+  },
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: Colors.dark,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
     borderBottomWidth: 3,
     borderBottomColor: Colors.dark,
   },
-  panelTitle: {
-    fontFamily: FontFamily.monoBold,
-    fontSize: 11,
-    color: '#fff',
+  title: {
+    fontFamily: FontFamily.title,
+    fontSize: 22,
+    color: Colors.dark,
   },
-  panelActions: {
-    flexDirection: 'row',
-    gap: 8,
+  closeShadow: {
+    position: 'absolute',
+    top: 3, left: 3, right: -3, bottom: -3,
+    backgroundColor: Colors.dark,
   },
-  actionBtn: {
-    width: 28,
-    height: 28,
-    borderWidth: 2,
-    borderColor: '#fff',
+  closeBtn: {
+    width: 40,
+    height: 40,
+    backgroundColor: '#fff',
+    borderWidth: 3,
+    borderColor: Colors.dark,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scroll: { maxHeight: 380 },
+  scroll: {
+    maxHeight: 460,
+    backgroundColor: Colors.bg,
+  },
   scrollContent: {
-    padding: 14,
-    gap: 10,
+    padding: 20,
+    gap: 18,
   },
   row: {
     flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
+    gap: 16,
+    alignItems: 'flex-start',
   },
-  iconPickerBtn: {
-    flex: 1,
+  // Landscape layout
+  landscapeBody: {
     flexDirection: 'row',
+    gap: 20,
+    alignItems: 'flex-start',
+  },
+  landscapeLeft: {
+    width: 120,
+    gap: 12,
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: Colors.dark,
   },
-  iconLabel: {
-    fontFamily: FontFamily.medium,
-    fontSize: 12,
-    color: Colors.dark,
+  landscapeRight: {
     flex: 1,
+    gap: 14,
   },
-  colorSwatch: {
-    width: 40,
-    height: 40,
+  previewShadow: {
+    position: 'absolute',
+    top: 4, left: 4, right: -4, bottom: -4,
+    backgroundColor: Colors.dark,
+  },
+  previewBox: {
+    width: 96,
+    height: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 3,
     borderColor: Colors.dark,
-    flexShrink: 0,
   },
   colorGrid: {
+    flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: Colors.dark,
-    padding: 8,
+    gap: 8,
+  },
+  colorShadow: {
+    position: 'absolute',
+    top: 3, left: 3, right: -3, bottom: -3,
+    backgroundColor: Colors.dark,
   },
   colorCell: {
-    width: 32,
-    height: 32,
-    borderWidth: 2,
-    borderColor: '#ccc',
-  },
-  colorCellActive: {
-    borderWidth: 3,
-    borderColor: Colors.dark,
+    width: 44,
+    height: 44,
   },
   field: {
-    gap: 4,
+    gap: 6,
   },
-  fieldRow: {
+  fieldHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   fieldLabel: {
     fontFamily: FontFamily.monoBold,
-    fontSize: 9,
+    fontSize: 10,
     color: '#888',
+    letterSpacing: 1.5,
   },
-  fieldValue: {
-    fontFamily: FontFamily.monoBold,
-    fontSize: 11,
-    color: Colors.dark,
-  },
-  textInput: {
+  input: {
     backgroundColor: '#fff',
     borderWidth: 2,
     borderColor: Colors.dark,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     fontFamily: FontFamily.medium,
-    fontSize: 13,
+    fontSize: 15,
     color: Colors.dark,
   },
-  cmdInput: {
+  badgeShadow: {
+    position: 'absolute',
+    top: 3, left: 3, right: -3, bottom: -3,
     backgroundColor: Colors.dark,
-    color: '#00C851',
-    fontFamily: FontFamily.mono,
   },
-  preview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingTop: 4,
-  },
-  previewBtn: {
+  badge: {
+    backgroundColor: '#E81C1C',
     borderWidth: 2,
     borderColor: Colors.dark,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  badgeText: {
+    fontFamily: FontFamily.monoBold,
+    fontSize: 12,
+    color: '#fff',
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 4,
+  },
+  btnShadow: {
+    position: 'absolute',
+    top: 4, left: 4, right: -4, bottom: -4,
+  },
+  actionBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
+    gap: 8,
+    paddingVertical: 14,
+    borderWidth: 3,
+    borderColor: Colors.dark,
   },
-  previewInfo: {
-    gap: 2,
-  },
-  previewName: {
+  actionText: {
     fontFamily: FontFamily.title,
-    fontSize: 12,
-    color: Colors.dark,
-  },
-  previewCmd: {
-    fontFamily: FontFamily.mono,
-    fontSize: 10,
-    color: '#00C851',
+    fontSize: 13,
+    color: '#fff',
+    letterSpacing: 1,
   },
 });

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, ReactNode } from "react";
 import { Platform, PermissionsAndroid, Alert } from "react-native";
 import { BleManager, Device } from "react-native-ble-plx";
 import { BluetoothStatus, ScannedDevice } from "../types/control.types";
@@ -13,6 +13,7 @@ interface BluetoothContextData {
   device: Device | null;
   isConnected: boolean;
   isScanning: boolean;
+  bluetoothEnabled: boolean;
   scannedDevices: ScannedDevice[];
   startScan: () => Promise<void>;
   stopScan: () => void;
@@ -32,6 +33,7 @@ export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [scannedDevices, setScannedDevices] = useState<ScannedDevice[]>([]);
+  const [bluetoothEnabled, setBluetoothEnabled] = useState(false);
 
   // Deriva status a partir dos estados booleanos
   const status: BluetoothStatus = isConnected
@@ -42,6 +44,14 @@ export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
     ? "scanning"
     : "disconnected";
 
+  // Monitora estado do adaptador Bluetooth
+  useEffect(() => {
+    const sub = manager.onStateChange((state) => {
+      setBluetoothEnabled(state === 'PoweredOn');
+    }, true); // true = emite o estado atual imediatamente
+    return () => sub.remove();
+  }, [manager]);
+
   // Cleanup na desmontagem
   useEffect(() => {
     return () => {
@@ -49,7 +59,7 @@ export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [manager]);
 
-  const requestPermissions = async () => {
+  const requestPermissions = useCallback(async () => {
     if (Platform.OS === "android") {
       if (Platform.Version >= 31) {
         await PermissionsAndroid.requestMultiple([
@@ -63,9 +73,15 @@ export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
         );
       }
     }
-  };
+  }, []);
 
-  const startScan = async () => {
+  const stopScan = useCallback(() => {
+    manager.stopDeviceScan();
+    setIsScanning(false);
+    console.log("LOG: Scan finalizado.");
+  }, [manager]);
+
+  const startScan = useCallback(async () => {
     await requestPermissions();
 
     if (isScanning) return;
@@ -105,15 +121,9 @@ export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
     setTimeout(() => {
       stopScan();
     }, 10000);
-  };
+  }, [manager, isScanning, requestPermissions, stopScan]);
 
-  const stopScan = () => {
-    manager.stopDeviceScan();
-    setIsScanning(false);
-    console.log("LOG: Scan finalizado.");
-  };
-
-  const connectToDevice = async (deviceInfo: ScannedDevice) => {
+  const connectToDevice = useCallback(async (deviceInfo: ScannedDevice) => {
     stopScan(); // Garante que parou de escanear
     setIsConnecting(true);
 
@@ -157,9 +167,9 @@ export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
         await manager.cancelDeviceConnection(deviceInfo.id);
       } catch (err) {}
     }
-  };
+  }, [manager, stopScan]);
 
-  const disconnect = async () => {
+  const disconnect = useCallback(async () => {
     if (device) {
       try {
         await device.cancelConnection();
@@ -167,10 +177,16 @@ export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
       setDevice(null);
       setIsConnected(false);
     }
-  };
+  }, [device]);
 
-  const sendCommand = async (command: string) => {
-    if (!device || !isConnected) return;
+  // Usa ref para device/isConnected para evitar recriar sendCommand a cada mudança
+  const deviceRef = useRef(device);
+  const isConnectedRef = useRef(isConnected);
+  deviceRef.current = device;
+  isConnectedRef.current = isConnected;
+
+  const sendCommand = useCallback(async (command: string) => {
+    if (!deviceRef.current || !isConnectedRef.current) return;
     try {
       const commandWithNewLine = command + "\n";
       const payload =
@@ -178,7 +194,7 @@ export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
           ? btoa(commandWithNewLine)
           : Buffer.from(commandWithNewLine).toString("base64");
 
-      await device.writeCharacteristicWithoutResponseForService(
+      await deviceRef.current.writeCharacteristicWithoutResponseForService(
         UART_SERVICE_UUID,
         UART_RX_UUID,
         payload
@@ -186,23 +202,29 @@ export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
     } catch (e) {
       console.error(`Erro envio ${command}:`, e);
     }
-  };
+  }, []);
+
+  // Memoiza o valor do contexto — evita re-render de todos os consumidores
+  // quando apenas um campo muda (ex: scannedDevices durante o scan)
+  const contextValue = useMemo(() => ({
+    status,
+    device,
+    isConnected,
+    isScanning,
+    bluetoothEnabled,
+    scannedDevices,
+    startScan,
+    stopScan,
+    connectToDevice,
+    disconnect,
+    sendCommand,
+  }), [
+    status, device, isConnected, isScanning, bluetoothEnabled,
+    scannedDevices, startScan, stopScan, connectToDevice, disconnect, sendCommand,
+  ]);
 
   return (
-    <BluetoothContext.Provider
-      value={{
-        status,
-        device,
-        isConnected,
-        isScanning,
-        scannedDevices,
-        startScan,
-        stopScan,
-        connectToDevice,
-        disconnect,
-        sendCommand,
-      }}
-    >
+    <BluetoothContext.Provider value={contextValue}>
       {children}
     </BluetoothContext.Provider>
   );

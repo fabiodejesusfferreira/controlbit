@@ -12,22 +12,33 @@ import {
 } from 'lucide-react-native';
 import { useBluetooth } from '../context/BluetoothContext';
 import DeviceListModal from './DeviceListModal';
+import BluetoothOffModal from './BluetoothOffModal';
 import { Colors, FontFamily, Shadow } from '../constants/theme';
 
 /**
  * Botão de conexão Bluetooth — aparece no header de todas as telas.
- * Abre o DeviceListModal ao tocar quando desconectado.
- * Desconecta ao tocar quando conectado.
+ * - Se Bluetooth desligado: abre BluetoothOffModal com instruções
+ * - Se desconectado: abre DeviceListModal para escanear dispositivos
+ * - Se conectado: desconecta ao tocar
  */
 export default function BluetoothStatusButton() {
-  const { status, device, disconnect } = useBluetooth();
-  const [showModal, setShowModal] = useState(false);
+  const { status, device, disconnect, bluetoothEnabled } = useBluetooth();
+  const [showDeviceModal, setShowDeviceModal] = useState(false);
+  const [showOffModal, setShowOffModal] = useState(false);
 
   const handlePress = () => {
     if (status === 'connected') {
       disconnect();
-    } else if (status === 'disconnected') {
-      setShowModal(true);
+      return;
+    }
+    if (status === 'scanning' || status === 'connecting') {
+      return; // botão desabilitado neste estado
+    }
+    // status === 'disconnected'
+    if (!bluetoothEnabled) {
+      setShowOffModal(true);
+    } else {
+      setShowDeviceModal(true);
     }
   };
 
@@ -53,7 +64,8 @@ export default function BluetoothStatusButton() {
     return 'BLE';
   };
 
-  const labelColor = status === 'connected' || status === 'disconnected' ? '#fff' : Colors.dark;
+  const labelColor =
+    status === 'connected' || status === 'disconnected' ? '#fff' : Colors.dark;
 
   return (
     <>
@@ -67,7 +79,13 @@ export default function BluetoothStatusButton() {
         <Text style={[styles.label, { color: labelColor }]}>{getLabel()}</Text>
       </TouchableOpacity>
 
-      {showModal && <DeviceListModal onClose={() => setShowModal(false)} />}
+      {showDeviceModal && (
+        <DeviceListModal onClose={() => setShowDeviceModal(false)} />
+      )}
+
+      {showOffModal && (
+        <BluetoothOffModal onClose={() => setShowOffModal(false)} />
+      )}
     </>
   );
 }

@@ -1,7 +1,20 @@
+// components/ControlPad/index.tsx
 import React, { useState } from 'react';
-import { View, TouchableOpacity, StyleSheet, Animated } from 'react-native';
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Bell } from 'lucide-react-native';
-import { Colors, Shadow } from '../constants/theme';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  Star,
+} from 'lucide-react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from 'react-native-reanimated';
+import { Colors } from '../constants/theme';
+import DottedBackground from './DottedBackground';
 
 interface Props {
   onCommand: (cmd: string) => void;
@@ -14,64 +27,142 @@ interface DPadButtonProps {
   dir: Direction;
   command: string;
   icon: React.ReactNode;
-  color?: string;
+  bgColor?: string;
+  activeBgColor?: string;
+  shadowOffset?: number;
   onStart: (cmd: string) => void;
   onEnd: () => void;
 }
+
+const BORDER_RADIUS: Record<Direction, object> = {
+  up: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+  },
+  down: {
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+  },
+  left: {
+    borderTopLeftRadius: 20,
+    borderBottomLeftRadius: 20,
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
+  },
+  right: {
+    borderTopRightRadius: 20,
+    borderBottomRightRadius: 20,
+    borderTopLeftRadius: 8,
+    borderBottomLeftRadius: 8,
+  },
+  center: {
+    borderRadius: 20,
+  },
+};
 
 function DPadButton({
   dir,
   command,
   icon,
-  color = Colors.dark,
+  bgColor = '#FFD82D',
+  activeBgColor = '#FFC000',
+  shadowOffset = 4,
   onStart,
   onEnd,
 }: DPadButtonProps) {
-  const [active, setActive] = useState(false);
+  const pressed = useSharedValue(0);
+  const [isActive, setIsActive] = useState(false);
+
+  // Mesmo sistema do NeoButton: translate X/Y ao pressionar
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: withTiming(pressed.value * shadowOffset, { duration: 80 }) },
+      { translateY: withTiming(pressed.value * shadowOffset, { duration: 80 }) },
+    ],
+  }));
+
+  // Overlay escuro ao pressionar (igual ao NeoButton)
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(pressed.value * 0.15, { duration: 80 }),
+  }));
 
   const handlePressIn = () => {
-    setActive(true);
+    pressed.value = 1;
+    setIsActive(true);
     onStart(command);
   };
 
   const handlePressOut = () => {
-    setActive(false);
+    pressed.value = 0;
+    setIsActive(false);
     onEnd();
   };
 
-  const isCenter = dir === 'center';
-
-  const borderRadius = {
-    up: { borderTopLeftRadius: 12, borderTopRightRadius: 12 },
-    down: { borderBottomLeftRadius: 12, borderBottomRightRadius: 12 },
-    left: { borderTopLeftRadius: 12, borderBottomLeftRadius: 12 },
-    right: { borderTopRightRadius: 12, borderBottomRightRadius: 12 },
-    center: { borderRadius: 999 },
-  }[dir];
+  const radiusStyle = BORDER_RADIUS[dir];
+  const SIZE = dir === 'center' ? 102 : 102;
 
   return (
-    <TouchableOpacity
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      activeOpacity={1}
-      style={[
-        styles.dpadBtn,
-        borderRadius,
-        {
-          backgroundColor: active ? '#FFE500' : color,
-          width: isCenter ? 64 : 72,
-          height: isCenter ? 64 : 72,
-          transform: [{ translateX: active ? 2 : 0 }, { translateY: active ? 2 : 0 }],
-        },
-        active ? styles.dpadBtnActive : styles.dpadBtnIdle,
-      ]}
-    >
-      <View style={{ opacity: 1 }}>
-        {React.cloneElement(icon as React.ReactElement<any>, {
-          color: active ? Colors.dark : '#fff',
-        })}
-      </View>
-    </TouchableOpacity>
+    // Container relativo — igual ao NeoButton
+    <View style={{ position: 'relative', width: SIZE, height: SIZE }}>
+
+      {/* Sombra sólida preta de fundo — igual ao NeoButton */}
+      <View
+        style={[
+          {
+            position: 'absolute',
+            top: shadowOffset,
+            left: shadowOffset,
+            right: -shadowOffset,
+            bottom: -shadowOffset,
+            backgroundColor: Colors.dark,
+          },
+          radiusStyle,
+        ]}
+      />
+
+      {/* Botão animado */}
+      <Animated.View style={[animatedStyle, { width: SIZE, height: SIZE }]}>
+        <TouchableOpacity
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          activeOpacity={1}
+          style={[
+            {
+              width: SIZE,
+              height: SIZE,
+              backgroundColor: isActive ? activeBgColor : bgColor,
+              borderWidth: 3,
+              borderColor: Colors.dark,
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+            },
+            radiusStyle,
+          ]}
+        >
+          {/* Ícone */}
+          {React.cloneElement(icon as React.ReactElement<any>, {
+            color: Colors.dark,
+            strokeWidth: 2,
+          })}
+
+          {/* Overlay de escurecimento — igual ao NeoButton */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: '#000' },
+              overlayStyle,
+            ]}
+          />
+        </TouchableOpacity>
+      </Animated.View>
+
+    </View>
   );
 }
 
@@ -90,86 +181,65 @@ export default function ControlPad({ onCommand, onStop }: Props) {
     setActive(null);
   };
 
+  const iconSize = 44
+
   return (
-    <View style={styles.container}>
-      {/* Up */}
-      <DPadButton
-        dir="up"
-        command="up"
-        icon={<ArrowUp size={28} strokeWidth={3} color="#fff" />}
-        onStart={handleStart}
-        onEnd={handleEnd}
-      />
+    <DottedBackground style={{ width: "100%", paddingVertical: 12 }}>
+      <View style={{ alignItems: 'center', gap: 8 }}>
 
-      {/* Middle row */}
-      <View style={styles.middleRow}>
+        {/* Up */}
         <DPadButton
-          dir="left"
-          command="left"
-          icon={<ArrowLeft size={28} strokeWidth={3} color="#fff" />}
+          dir="up"
+          command="up"
+          icon={<ArrowUp size={iconSize} />}
           onStart={handleStart}
           onEnd={handleEnd}
         />
 
-        {/* Center — Horn */}
-        <DPadButton
-          dir="center"
-          command="horn"
-          color="#FF6B00"
-          icon={<Bell size={24} strokeWidth={2.5} color="#fff" />}
-          onStart={handleStart}
-          onEnd={() => setActive(null)}
-        />
+        {/* Middle row */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
 
+          {/* Left */}
+          <DPadButton
+            dir="left"
+            command="left"
+            icon={<ArrowLeft size={iconSize} />}
+            onStart={handleStart}
+            onEnd={handleEnd}
+          />
+
+          {/* Center — Horn */}
+          <DPadButton
+            dir="center"
+            command="horn"
+            bgColor="#E81C1C"
+            activeBgColor="#C01010"
+            icon={<Star size={iconSize} fill="#fff" color="#fff" strokeWidth={2} />}
+            onStart={handleStart}
+            onEnd={() => setActive(null)}
+          />
+
+          {/* Right */}
+          <DPadButton
+            dir="right"
+            command="right"
+            icon={<ArrowRight size={iconSize} />}
+            onStart={handleStart}
+            onEnd={handleEnd}
+          />
+
+        </View>
+
+        {/* Down */}
         <DPadButton
-          dir="right"
-          command="right"
-          icon={<ArrowRight size={28} strokeWidth={3} color="#fff" />}
+          dir="down"
+          command="down"
+          icon={<ArrowDown size={iconSize} />}
           onStart={handleStart}
           onEnd={handleEnd}
         />
+
       </View>
-
-      {/* Down */}
-      <DPadButton
-        dir="down"
-        command="down"
-        icon={<ArrowDown size={28} strokeWidth={3} color="#fff" />}
-        onStart={handleStart}
-        onEnd={handleEnd}
-      />
-    </View>
+    </DottedBackground>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  middleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  dpadBtn: {
-    borderWidth: 3,
-    borderColor: Colors.dark,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dpadBtnIdle: {
-    shadowColor: Colors.dark,
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 6,
-  },
-  dpadBtnActive: {
-    shadowColor: Colors.dark,
-    shadowOffset: { width: 1, height: 1 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 2,
-  },
-});

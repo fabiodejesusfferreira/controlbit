@@ -91,7 +91,7 @@ export default function DeviceListModal({ onClose }: Props) {
 
   const renderDevice = ({ item, index }: { item: ScannedDevice; index: number }) => (
     <TouchableOpacity
-      style={[styles.deviceRow, Shadow.neoSmall]}
+      style={[styles.deviceRow]}
       activeOpacity={0.85}
       onPress={() => handleConnect(item)}
     >
@@ -199,7 +199,7 @@ export default function DeviceListModal({ onClose }: Props) {
           )}
 
           {/* Safe area bottom */}
-          <View style={{ height: 16 }} />
+          <View style={{ height: 56, backgroundColor: Colors.bg }} />
         </Animated.View>
       </TouchableOpacity>
     </Modal>
@@ -220,11 +220,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     maxHeight: '72%',
-    shadowColor: Colors.dark,
-    shadowOffset: { width: -4, height: -4 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 12,
   },
   header: {
     flexDirection: 'row',

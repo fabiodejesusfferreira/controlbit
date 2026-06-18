@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -23,7 +23,12 @@ interface Props {
   onRelease?: () => void;
 }
 
-export default function DraggableButton({
+// Cores claras que precisam de texto escuro
+const LIGHT_COLORS = new Set([
+  '#FFD82D', '#FFE500', '#FFFFFF', '#F5F0E8', '#06B6D4', '#22C55E',
+]);
+
+function DraggableButton({
   button,
   editMode,
   focused,
@@ -34,99 +39,131 @@ export default function DraggableButton({
   onPress,
   onRelease,
 }: Props) {
-  const size = button.size ?? 80;
-  const color = button.color ?? '#FFE500';
+  const size   = button.size  ?? 80;
+  const color  = button.color ?? '#FFD82D';
+  const textColor = LIGHT_COLORS.has(color) ? Colors.dark : '#fff';
 
-  // Posição animada — sem offset, apenas setValue absoluto
+  // ─── Posição animada ──────────────────────────────────────────────────────
   const panX = useRef(new Animated.Value(button.x ?? 0)).current;
   const panY = useRef(new Animated.Value(button.y ?? 0)).current;
 
-  // Posição "confirmada" (salva no onMove)
-  const posRef = useRef({ x: button.x ?? 0, y: button.y ?? 0 });
+  // Posição confirmada (não dispara re-render)
+  const posRef      = useRef({ x: button.x ?? 0, y: button.y ?? 0 });
+  const dragStart   = useRef({ x: 0, y: 0 });
+  const isDragging  = useRef(false);
 
-  // Posição no início de cada gesto (capturada no onPanResponderGrant)
-  const dragStart = useRef({ x: 0, y: 0 });
+  // Refs para callbacks — evita recriar PanResponder quando funções mudam
+  const onMoveRef   = useRef(onMove);
+  const onFocusRef  = useRef(onFocus);
+  onMoveRef.current  = onMove;
+  onFocusRef.current = onFocus;
 
-  // Sincroniza quando props mudam externamente
-  React.useEffect(() => {
+  // Refs para limites do canvas — atualizadas a cada render sem recriar o PanResponder
+  const canvasWidthRef  = useRef(canvasWidth);
+  const canvasHeightRef = useRef(canvasHeight);
+  canvasWidthRef.current  = canvasWidth;
+  canvasHeightRef.current = canvasHeight;
+
+  // Sync externo de posição (troca de perfil etc.)
+  const prevIdRef = useRef(button.id);
+  if (prevIdRef.current !== button.id) {
+    prevIdRef.current = button.id;
     panX.setValue(button.x ?? 0);
     panY.setValue(button.y ?? 0);
     posRef.current = { x: button.x ?? 0, y: button.y ?? 0 };
-  }, [button.x, button.y]);
+  }
 
-  const [isPressed, setIsPressed] = useState(false);
-
-  // ─── PanResponder — SOMENTE setValue manual, sem Animated.event ─────────────
-  // Causa do bug anterior: Animated.event + setOffset/setValue manual corriam
-  // em sequência conflitante causando salto.
-
+  // ─── PanResponder — criado UMA única vez por instância ───────────────────
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => editMode,
-      onMoveShouldSetPanResponder: (_, gs) =>
-        editMode && (Math.abs(gs.dx) > 4 || Math.abs(gs.dy) > 4),
+      onMoveShouldSetPanResponder:  (_, gs) =>
+        editMode && (Math.abs(gs.dx) > 3 || Math.abs(gs.dy) > 3),
 
       onPanResponderGrant: () => {
-        // Salva posição atual — gs.dx/dy neste handler é sempre 0
-        dragStart.current = { ...posRef.current };
+        isDragging.current = false;
+        dragStart.current  = { ...posRef.current };
       },
 
       onPanResponderMove: (_, gs) => {
-        // gs.dx/dy são CUMULATIVOS a partir do grant — soma com a posição inicial
-        const newX = Math.max(0, Math.min(dragStart.current.x + gs.dx, canvasWidth - size));
-        const newY = Math.max(0, Math.min(dragStart.current.y + gs.dy, canvasHeight - size));
+        if (Math.abs(gs.dx) > 3 || Math.abs(gs.dy) > 3) {
+          isDragging.current = true;
+        }
+        const sz = size;
+        // Usa refs para pegar os limites atuais do canvas (evita closure stale)
+        const newX = Math.max(0, Math.min(
+          dragStart.current.x + gs.dx, canvasWidthRef.current  - sz,
+        ));
+        const newY = Math.max(0, Math.min(
+          dragStart.current.y + gs.dy, canvasHeightRef.current - sz,
+        ));
         panX.setValue(newX);
         panY.setValue(newY);
       },
 
       onPanResponderRelease: (_, gs) => {
-        const newX = Math.max(0, Math.min(dragStart.current.x + gs.dx, canvasWidth - size));
-        const newY = Math.max(0, Math.min(dragStart.current.y + gs.dy, canvasHeight - size));
-
+        const sz   = size;
+        const newX = Math.max(0, Math.min(
+          dragStart.current.x + gs.dx, canvasWidthRef.current  - sz,
+        ));
+        const newY = Math.max(0, Math.min(
+          dragStart.current.y + gs.dy, canvasHeightRef.current - sz,
+        ));
         posRef.current = { x: newX, y: newY };
         panX.setValue(newX);
         panY.setValue(newY);
-        onMove?.(button.id, newX, newY);
 
-        // Toque simples (sem arrastar) → seleciona
-        if (Math.abs(gs.dx) < 5 && Math.abs(gs.dy) < 5) {
-          onFocus?.(button.id);
+        if (isDragging.current) {
+          // Só chama onMove se realmente arrastou
+          onMoveRef.current?.(button.id, newX, newY);
+        } else {
+          // Toque simples → foco / abre form
+          onFocusRef.current?.(button.id);
         }
+        isDragging.current = false;
       },
 
       onPanResponderTerminate: () => {
-        // Restaura posição se o gesto for cancelado
         panX.setValue(posRef.current.x);
         panY.setValue(posRef.current.y);
+        isDragging.current = false;
       },
     }),
   ).current;
 
-  // ─── Modo play ───────────────────────────────────────────────────────────────
+  // ─── Handlers modo play ───────────────────────────────────────────────────
+  const pressAnim = useRef(new Animated.Value(0)).current;
 
-  const handlePressIn = () => {
+  const handlePressIn = useCallback(() => {
     if (editMode) return;
-    setIsPressed(true);
+    Animated.timing(pressAnim, {
+      toValue: 1,
+      duration: 60,
+      useNativeDriver: false, // backgroundColor não suporta native driver
+    }).start();
     onPress?.();
-  };
+  }, [editMode, onPress]);
 
-  const handlePressOut = () => {
+  const handlePressOut = useCallback(() => {
     if (editMode) return;
-    setIsPressed(false);
+    Animated.timing(pressAnim, {
+      toValue: 0,
+      duration: 100,
+      useNativeDriver: false,
+    }).start();
     onRelease?.();
-  };
+  }, [editMode, onRelease]);
 
-  // ─── Visual ─────────────────────────────────────────────────────────────────
+  // Interpola cor de fundo no press (modo play)
+  const animatedBg = pressAnim.interpolate({
+    inputRange:  [0, 1],
+    outputRange: [color, '#FFD82D'],
+  });
 
-  const textColor = ['#FFE500', '#FFFFFF', '#F5F0E8', '#00D9F5', '#00C851'].includes(color)
-    ? Colors.dark
-    : '#fff';
-
-  const borderColor = editMode
-    ? focused ? '#0066FF' : '#FF6B00'
-    : Colors.dark;
-
-  const borderStyle = editMode && !focused ? 'dashed' : 'solid';
+  // ─── Borda: no editMode sempre laranja tracejado, sem borda azul ──────────
+  // focused agora só eleva zIndex, sem mudar a borda
+  const borderColor = editMode ? '#FF6B00' : Colors.dark;
+  const borderStyle = editMode ? 'dashed' : 'solid';
 
   return (
     <Animated.View
@@ -134,16 +171,21 @@ export default function DraggableButton({
       style={[
         styles.btn,
         {
-          left: panX,
-          top: panY,
-          width: size,
+          left:   panX,
+          top:    panY,
+          width:  size,
           height: size,
-          backgroundColor: isPressed ? '#FFE500' : color,  
+          // No play: anima a cor. No edit: cor estática (melhor perf)
+          backgroundColor: editMode ? color : animatedBg,
           borderColor,
           borderStyle,
           zIndex: focused ? 20 : 10,
-          shadowOffset: { width: focused ? 3 : 2, height: focused ? 3 : 2 },
-          shadowColor: focused ? '#0066FF' : Colors.dark,
+          // Sombra fixa — não varia com focused
+          shadowColor:  Colors.dark,
+          shadowOffset: { width: 3, height: 3 },
+          shadowOpacity: 1,
+          shadowRadius:  0,
+          elevation: 6,
         },
       ]}
     >
@@ -151,21 +193,22 @@ export default function DraggableButton({
         style={styles.inner}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        activeOpacity={editMode ? 1 : 0.85}
+        activeOpacity={editMode ? 1 : 0.9}
         disabled={editMode}
       >
         <Icon
           name={button.icon}
           size={Math.round(size * 0.32)}
-          color={isPressed ? Colors.dark : textColor}
+          color={textColor}
         />
+
         {button.label && size > 55 && (
           <Text
             style={[
               styles.label,
               {
                 fontSize: Math.max(8, Math.round(size * 0.13)),
-                color: isPressed ? Colors.dark : textColor,
+                color: textColor,
               },
             ]}
             numberOfLines={1}
@@ -174,23 +217,37 @@ export default function DraggableButton({
           </Text>
         )}
 
+        {/* Indicador de arrastar — apenas no edit */}
         {editMode && (
-          <Text style={[styles.dragHint, { color: focused ? '#0066FF' : '#FF6B00' }]}>
-            ✥
-          </Text>
+          <Text style={styles.dragHint}>✥</Text>
         )}
       </TouchableOpacity>
     </Animated.View>
   );
 }
 
+// memo: só re-renderiza se props mudarem de fato
+export default memo(DraggableButton, (prev, next) => {
+  return (
+    prev.button.id      === next.button.id      &&
+    prev.button.x       === next.button.x       &&
+    prev.button.y       === next.button.y       &&
+    prev.button.size    === next.button.size    &&
+    prev.button.color   === next.button.color   &&
+    prev.button.icon    === next.button.icon    &&
+    prev.button.label   === next.button.label   &&
+    prev.button.command === next.button.command &&
+    prev.focused        === next.focused        &&
+    prev.editMode       === next.editMode       &&
+    prev.canvasWidth    === next.canvasWidth    &&
+    prev.canvasHeight   === next.canvasHeight
+  );
+});
+
 const styles = StyleSheet.create({
   btn: {
     position: 'absolute',
     borderWidth: 3,
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 8,
   },
   inner: {
     flex: 1,
@@ -208,6 +265,7 @@ const styles = StyleSheet.create({
     bottom: 3,
     right: 4,
     fontSize: 9,
+    color: '#FF6B00',
     fontFamily: FontFamily.mono,
   },
 });

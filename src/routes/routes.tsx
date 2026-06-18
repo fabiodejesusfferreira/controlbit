@@ -1,4 +1,4 @@
-import { Platform, TouchableOpacity } from "react-native";
+import { Platform } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Home, Gamepad2, PencilRuler } from "lucide-react-native";
@@ -11,7 +11,7 @@ import BasicControl from "../screens/BasicControl";
 import CustomControl from "../screens/CustomControl";
 import CustomPlay from "../screens/CustomPlay";
 
-// ─── Bottom Tabs (Home + BasicControl) ───────────────────────────────────────
+// ─── Bottom Tabs ──────────────────────────────────────────────────────────────
 
 const { Screen: TabScreen, Navigator: TabNavigator } =
   createBottomTabNavigator<TabParamList>();
@@ -23,8 +23,13 @@ function BottomRoutes() {
 
   return (
     <TabNavigator
+      // Pré-carrega todas as tabs na inicialização — elimina o freeze da
+      // primeira visita a cada tab
+      initialRouteName="home"
       screenOptions={({ route }) => ({
         headerShown: false,
+        // Não desmonta telas inativas: mantém state e evita re-mount jank
+        lazy: false,
         tabBarStyle: {
           borderTopWidth: 3,
           borderTopColor: Colors.dark,
@@ -58,25 +63,42 @@ function BottomRoutes() {
   );
 }
 
-// ─── Root Stack (Tabs + telas sem tab bar) ───────────────────────────────────
+// ─── Root Stack ───────────────────────────────────────────────────────────────
 
 const { Screen: StackScreen, Navigator: StackNavigator } =
   createNativeStackNavigator<RootStackParamList>();
 
 export function AppNavigator() {
   return (
-    <StackNavigator screenOptions={{ headerShown: false }}>
-      <StackScreen name="tabs" component={BottomRoutes} />
+    <StackNavigator
+      screenOptions={{
+        headerShown: false,
+        // Animação padrão mais rápida para o stack
+        animation: "fade_from_bottom",
+        animationDuration: 200,
+      }}
+    >
+      {/* Tabs — sem animação extra ao entrar na raiz */}
+      <StackScreen
+        name="tabs"
+        component={BottomRoutes}
+        options={{ animation: "none" }}
+      />
+
+      {/* CustomControl standalone (usado via navigate do Home) */}
       <StackScreen
         name="customcontrol"
         component={CustomControl}
-        options={{ animation: "slide_from_right" }}
+        options={{ animation: "slide_from_right", animationDuration: 220 }}
       />
+
+      {/* CustomPlay — apresentação modal full screen */}
       <StackScreen
         name="customplay"
         component={CustomPlay}
         options={{
-          animation: "slide_from_bottom",
+          animation: "fade_from_bottom",
+          animationDuration: 200,
           presentation: "fullScreenModal",
         }}
       />

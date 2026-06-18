@@ -3,176 +3,267 @@ import {
   View,
   Text,
   TouchableOpacity,
-  StyleSheet,
   StatusBar,
   LayoutChangeEvent,
+  StyleSheet,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ScreenOrientation from 'expo-screen-orientation';
-import { ArrowLeft, Edit3, Activity, StopCircle } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  Pencil,
+  Activity,
+  StopCircle,
+  RotateCcw,
+} from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { ControlButton, ControlProfile } from '../../types/control.types';
 import { CommandStorage } from '../../services/storage';
 import { useBluetooth } from '../../context/BluetoothContext';
 import DraggableButton from '../../components/DraggableButton';
 import BluetoothStatusButton from '../../components/BluetoothButton';
-import { Colors, FontFamily, Shadow } from '../../constants/theme';
+import { Colors, FontFamily } from '../../constants/theme';
+import { RootStackNavigationProp } from '../../types/navigation.types';
+import { useScreenOrientation } from '../../hooks/useScreenOrientation';
 
 export default function CustomPlay() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<RootStackNavigationProp>();
   const insets = useSafeAreaInsets();
-  const { sendCommand, status } = useBluetooth();
-  const isConnected = status === 'connected';
+  const { sendCommand, isConnected } = useBluetooth();
+
+  // Inicia com a orientação do perfil (portrait por default,
+  // ajustado depois do load)
+  const { orientation, toggle, isLandscape, set } = useScreenOrientation('portrait');
 
   const [profile, setProfile] = useState<ControlProfile | null>(null);
   const [buttons, setButtons] = useState<ControlButton[]>([]);
   const [activeCmd, setActiveCmd] = useState('');
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [canvasSize, setCanvasSize] = useState({ width: 300, height: 400 });
+  const [canvasSize, setCanvasSize] = useState({ width: 300, height: 500 });
 
-  useEffect(() => {
-    (async () => {
-      const p = await CommandStorage.getActiveProfile();
-      setProfile(p);
-      setButtons(p.buttons);
+  // Animação do botão STOP ao pressionar
+  const stopAnim = useRef(new Animated.Value(0)).current;
 
-      // Travar orientação conforme configurado no perfil
-      if (p.orientation === 'landscape') {
-        await ScreenOrientation.lockAsync(
-          ScreenOrientation.OrientationLock.LANDSCAPE,
-        );
-      } else {
-        await ScreenOrientation.lockAsync(
-          ScreenOrientation.OrientationLock.PORTRAIT_UP,
-        );
-      }
-    })();
+  // ── Carregar perfil ─────────────────────────────────────────────────────────
+  const loadProfile = useCallback(async () => {
+    const active = await CommandStorage.getActiveProfile();
+    setProfile(active);
+    setButtons(active.buttons.map((b) => ({ ...b })));
+    // Aplica orientação salva no perfil
+    if (active.orientation) {
+      set(active.orientation);
+    }
+  }, [set]);
 
-    return () => {
-      // Restaura orientação ao sair
-      ScreenOrientation.unlockAsync();
-    };
-  }, []);
+  useEffect(() => { loadProfile(); }, [loadProfile]);
 
-  const handlePress = useCallback(
-    (button: ControlButton) => {
-      setActiveCmd(button.command);
-      setActiveId(button.id);
-      sendCommand(button.command);
-    },
-    [sendCommand],
-  );
-
-  const handleRelease = useCallback(() => {
-    sendCommand('stop');
-    setActiveCmd('stop');
-    setActiveId(null);
-    setTimeout(() => setActiveCmd(''), 300);
+  // ── Handlers ────────────────────────────────────────────────────────────────
+  const handlePress = useCallback((cmd: string) => {
+    setActiveCmd(cmd);
+    sendCommand(cmd);
   }, [sendCommand]);
 
-  const getCmdBg = () => {
-    if (!activeCmd) return '#2A2A2A';
-    if (activeCmd === 'stop') return '#7B2FFF';
-    const activeBtn = buttons.find((b) => b.command === activeCmd);
-    return activeBtn?.color ?? '#00C851';
-  };
+  const handleRelease = useCallback(() => {
+    setActiveCmd('');
+  }, []);
 
-  const onCanvasLayout = (e: LayoutChangeEvent) => {
+  const handleStop = useCallback(() => {
+    // Animação de press no botão stop
+    Animated.sequence([
+      Animated.timing(stopAnim, { toValue: 1, duration: 60, useNativeDriver: true }),
+      Animated.timing(stopAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
+    ]).start();
+    setActiveCmd('stop');
+    sendCommand('stop');
+    setTimeout(() => setActiveCmd(''), 300);
+  }, [sendCommand, stopAnim]);
+
+  const onCanvasLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
     setCanvasSize({ width, height });
-  };
+  }, []);
+
+  // TX bar: muda cor conforme comando ativo
+  const txBg = activeCmd ? '#1A1A1A' : '#E5E0D5';
+  const txTextColor = activeCmd ? '#FFD82D' : '#999';
+
+  // Translate do botão stop ao pressionar
+  const stopTranslate = stopAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 3],
+  });
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.dark} />
+    <View style={styles.screen}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={Colors.dark}
+        hidden={isLandscape}
+      />
 
-      {/* ── Header ─────────────────────────────────────────────────── */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={[styles.backBtn, Shadow.neoSmall]}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.8}
-        >
-          <ArrowLeft size={18} color={Colors.dark} strokeWidth={3} />
-        </TouchableOpacity>
+      {/* ── Header — oculto no landscape ───────────────────────────── */}
+      {!isLandscape && (
+        <View style={[styles.header, { paddingTop: insets.top }]}>
+          {/* Back */}
+          <View style={{ position: 'relative' }}>
+            <View style={styles.fabShadowAbs} />
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.8}
+            >
+              <ArrowLeft size={18} color={Colors.dark} strokeWidth={3} />
+            </TouchableOpacity>
+          </View>
 
-        <View style={styles.headerTitles}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {profile?.name?.toUpperCase() ?? 'CONTROLE'}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {profile?.name?.toUpperCase() ?? 'CARRO PADRÃO'}
+            </Text>
+            <Text style={styles.headerSub}>MODO JOGO</Text>
+          </View>
+
+          {/* Editar */}
+          <View style={{ position: 'relative', marginRight: 8 }}>
+            <View style={styles.fabShadowAbs} />
+            <TouchableOpacity
+              style={[styles.headerIconBtn, { backgroundColor: '#1C37B5' }]}
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.8}
+            >
+              <Pencil size={16} color="#fff" strokeWidth={2.5} />
+            </TouchableOpacity>
+          </View>
+
+          <BluetoothStatusButton />
+        </View>
+      )}
+
+      {/* ── TX Indicator — oculto no landscape ─────────────────────── */}
+      {!isLandscape && (
+        <View style={[styles.txBar, { backgroundColor: txBg }]}>
+          <Activity size={14} color={txTextColor} strokeWidth={2.5} />
+          <Text style={[styles.txText, { color: txTextColor }]}>
+            {activeCmd ? activeCmd.toUpperCase() : 'AGUARDANDO'}
           </Text>
-          <Text style={styles.headerSub}>MODO JOGO</Text>
+          {!isConnected && (
+            <Text style={styles.simLabel}>SIMULANDO</Text>
+          )}
         </View>
+      )}
 
-        <TouchableOpacity
-          style={[styles.editBtn, Shadow.neoSmall]}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.8}
-        >
-          <Edit3 size={16} color="#fff" strokeWidth={2.5} />
-        </TouchableOpacity>
-
-        <BluetoothStatusButton />
-      </View>
-
-      {/* ── TX bar ─────────────────────────────────────────────────── */}
-      <View style={[styles.txBar, { backgroundColor: getCmdBg() }]}>
-        <Activity
-          size={14}
-          color={activeCmd ? Colors.dark : '#555'}
-          strokeWidth={2.5}
-        />
-        <Text
-          style={[
-            styles.txText,
-            { color: activeCmd ? Colors.dark : '#555' },
-          ]}
-        >
-          {activeCmd ? `TX → "${activeCmd}"` : '— AGUARDANDO —'}
-        </Text>
-        <View style={[styles.bleTag, { backgroundColor: isConnected ? '#00C851' : '#FF2D2D' }]}>
-          <Text style={styles.bleTagText}>{isConnected ? 'BLE ON' : 'SIM'}</Text>
-        </View>
-      </View>
-
-      {/* ── Canvas play ────────────────────────────────────────────── */}
+      {/* ── Canvas ─────────────────────────────────────────────────── */}
       <View style={styles.canvas} onLayout={onCanvasLayout}>
         {buttons.map((btn) => (
           <DraggableButton
             key={btn.id}
             button={btn}
             editMode={false}
-            focused={activeId === btn.id}
+            focused={false}
             canvasWidth={canvasSize.width}
             canvasHeight={canvasSize.height}
-            onPress={() => handlePress(btn)}
+            onPress={() => handlePress(btn.command)}
             onRelease={handleRelease}
           />
         ))}
 
         {buttons.length === 0 && (
           <View style={styles.emptyState}>
-            <View style={[styles.emptyIcon, Shadow.neoSmall]}>
-              <Edit3 size={24} color="#555" strokeWidth={2} />
-            </View>
             <Text style={styles.emptyTitle}>Nenhum botão configurado</Text>
-            <Text style={styles.emptySub}>Volte ao editor para adicionar botões</Text>
+            <Text style={styles.emptySub}>
+              Volte ao editor e adicione botões
+            </Text>
+          </View>
+        )}
+
+        {/* ── FABs flutuantes — sempre visíveis ───────────────────── */}
+        <View
+          style={[
+            styles.fabColumn,
+            // No landscape, respeita inset lateral (notch)
+            isLandscape && { top: 16, left: insets.left + 12 },
+          ]}
+        >
+          {/* Orientação */}
+          <PlayFAB onPress={toggle} bg="#1C37B5">
+            <RotateCcw size={18} color="#fff" strokeWidth={2.5} />
+          </PlayFAB>
+
+          {/* STOP flutuante */}
+          <PlayFAB onPress={handleStop} bg="#E81C1C">
+            <StopCircle size={18} color="#fff" strokeWidth={2.5} />
+          </PlayFAB>
+
+          {/* No landscape: botão de editar e BT também viram FABs */}
+          {isLandscape && (
+            <>
+              <PlayFAB onPress={() => navigation.goBack()} bg="#FFD82D">
+                <Pencil size={16} color={Colors.dark} strokeWidth={2.5} />
+              </PlayFAB>
+            </>
+          )}
+        </View>
+
+        {/* TX mini badge no landscape */}
+        {isLandscape && activeCmd !== '' && (
+          <View style={styles.txBadge}>
+            <Text style={styles.txBadgeText}>{activeCmd.toUpperCase()}</Text>
           </View>
         )}
       </View>
+    </View>
+  );
+}
 
-      {/* ── STOP ───────────────────────────────────────────────────── */}
-      <TouchableOpacity
-        style={styles.stopBtn}
-        onPressIn={() => {
-          sendCommand('stop');
-          setActiveCmd('stop');
+// ─── FAB do play ──────────────────────────────────────────────────────────────
+function PlayFAB({
+  onPress,
+  bg,
+  children,
+}: {
+  onPress: () => void;
+  bg: string;
+  children: React.ReactNode;
+}) {
+  const pressAnim = useRef(new Animated.Value(0)).current;
+
+  const onIn = () =>
+    Animated.timing(pressAnim, { toValue: 1, duration: 60, useNativeDriver: true }).start();
+  const onOut = () =>
+    Animated.timing(pressAnim, { toValue: 0, duration: 80, useNativeDriver: true }).start();
+
+  const translate = pressAnim.interpolate({
+    inputRange: [0, 1], outputRange: [0, 3],
+  });
+
+  return (
+    <View style={{ position: 'relative', width: 48, height: 48 }}>
+      {/* Sombra sólida */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 4, left: 4, right: -4, bottom: -4,
+          backgroundColor: Colors.dark,
         }}
-        onPressOut={() => setTimeout(() => setActiveCmd(''), 300)}
-        activeOpacity={0.9}
-      >
-        <StopCircle size={18} color="#fff" strokeWidth={2.5} />
-        <Text style={styles.stopText}>STOP</Text>
-      </TouchableOpacity>
+      />
+      <Animated.View style={{ transform: [{ translateX: translate }, { translateY: translate }] }}>
+        <TouchableOpacity
+          onPressIn={onIn}
+          onPressOut={onOut}
+          onPress={onPress}
+          activeOpacity={1}
+          style={{
+            width: 48,
+            height: 48,
+            backgroundColor: bg,
+            borderWidth: 3,
+            borderColor: Colors.dark,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {children}
+        </TouchableOpacity>
+      </Animated.View>
     </View>
   );
 }
@@ -180,126 +271,154 @@ export default function CustomPlay() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.dark,
+    backgroundColor: Colors.bg,
   },
+
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
     backgroundColor: Colors.dark,
     borderBottomWidth: 3,
-    borderBottomColor: '#FFE500',
+    borderBottomColor: Colors.dark,
+    gap: 10,
   },
   backBtn: {
-    width: 36,
-    height: 36,
-    backgroundColor: '#FFE500',
+    width: 40,
+    height: 40,
+    backgroundColor: '#FFD82D',
     borderWidth: 3,
     borderColor: Colors.dark,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
-  headerTitles: {
-    flex: 1,
-    minWidth: 0,
+  headerIconBtn: {
+    width: 40,
+    height: 40,
+    borderWidth: 3,
+    borderColor: Colors.dark,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontFamily: FontFamily.title,
-    fontSize: 15,
+    fontSize: 14,
     color: '#fff',
-    lineHeight: 18,
+    letterSpacing: 1.5,
   },
   headerSub: {
-    fontFamily: FontFamily.mono,
-    fontSize: 10,
-    color: '#FFE500',
+    fontFamily: FontFamily.monoBold,
+    fontSize: 9,
+    color: '#FFD82D',
+    letterSpacing: 2,
+    marginTop: 1,
   },
-  editBtn: {
-    width: 36,
-    height: 36,
-    backgroundColor: '#7B2FFF',
-    borderWidth: 3,
-    borderColor: '#FFE500',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+
+  // Sombra absoluta reutilizável
+  fabShadowAbs: {
+    position: 'absolute',
+    top: 4, left: 4, right: -4, bottom: -4,
+    backgroundColor: '#000',
   },
+
+  // TX bar
   txBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 3,
+    paddingVertical: 7,
+    borderBottomWidth: 2,
     borderBottomColor: Colors.dark,
+    gap: 8,
   },
   txText: {
     fontFamily: FontFamily.monoBold,
     fontSize: 11,
     flex: 1,
   },
-  bleTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderWidth: 2,
-    borderColor: Colors.dark,
-  },
-  bleTagText: {
+  simLabel: {
     fontFamily: FontFamily.monoBold,
     fontSize: 9,
-    color: '#fff',
+    color: '#f87171',
   },
+
+  // Canvas
   canvas: {
     flex: 1,
     position: 'relative',
-    backgroundColor: '#111',
-    overflow: 'hidden',
+    backgroundColor: '#F5F0E8',
   },
+
+  // FABs — coluna superior esquerda dentro do canvas
+  fabColumn: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    gap: 10,
+    alignItems: 'center',
+    // zIndex garante que ficam acima dos botões do usuário
+    zIndex: 100,
+  },
+
+  // TX badge no landscape
+  txBadge: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    backgroundColor: Colors.dark,
+    borderWidth: 2,
+    borderColor: '#FFD82D',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    zIndex: 100,
+  },
+  txBadgeText: {
+    fontFamily: FontFamily.monoBold,
+    fontSize: 11,
+    color: '#FFD82D',
+  },
+
+  // Empty state
   emptyState: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-  },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    backgroundColor: '#222',
-    borderWidth: 3,
-    borderColor: '#333',
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
   },
   emptyTitle: {
     fontFamily: FontFamily.title,
     fontSize: 14,
-    color: '#666',
+    color: '#bbb',
   },
   emptySub: {
     fontFamily: FontFamily.mono,
     fontSize: 11,
-    color: '#555',
+    color: '#ccc',
+  },
+
+  // Botão PARAR (portrait)
+  stopShadow: {
+    position: 'absolute',
+    top: 4, left: 0, right: 0, bottom: -4,
+    backgroundColor: '#7B0000',
   },
   stopBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    backgroundColor: '#FF2D2D',
+    backgroundColor: '#E81C1C',
     borderTopWidth: 3,
-    borderTopColor: '#FF2D2D',
+    borderTopColor: Colors.dark,
+    paddingVertical: 18,
+    gap: 12,
   },
   stopText: {
-    fontFamily: FontFamily.monoBold,
-    fontSize: 14,
+    fontFamily: FontFamily.title,
+    fontSize: 18,
     color: '#fff',
+    letterSpacing: 2,
   },
 });
