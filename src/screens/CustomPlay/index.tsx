@@ -14,7 +14,6 @@ import {
   Pencil,
   Activity,
   StopCircle,
-  RotateCcw,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { ControlButton, ControlProfile } from '../../types/control.types';
@@ -25,11 +24,14 @@ import BluetoothStatusButton from '../../components/BluetoothButton';
 import { Colors, FontFamily } from '../../constants/theme';
 import { RootStackNavigationProp } from '../../types/navigation.types';
 import { useScreenOrientation } from '../../hooks/useScreenOrientation';
+import { useLanguage } from '../../context/LanguageContext';
+import MobileRotateIcon from '../../components/icons/MobileRotateIcon';
 
 export default function CustomPlay() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const insets = useSafeAreaInsets();
   const { sendCommand, isConnected } = useBluetooth();
+  const { t } = useLanguage();
 
   // Inicia com a orientação do perfil (portrait por default,
   // ajustado depois do load)
@@ -45,7 +47,7 @@ export default function CustomPlay() {
 
   // ── Carregar perfil ─────────────────────────────────────────────────────────
   const loadProfile = useCallback(async () => {
-    const active = await CommandStorage.getActiveProfile();
+    const active = await CommandStorage.getActiveProfile(t);
     setProfile(active);
     setButtons(active.buttons.map((b) => ({ ...b })));
     // Aplica orientação salva no perfil
@@ -117,9 +119,9 @@ export default function CustomPlay() {
 
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle} numberOfLines={1}>
-              {profile?.name?.toUpperCase() ?? 'CARRO PADRÃO'}
+              {profile?.name?.toUpperCase() ?? t('custom_play_default_car')}
             </Text>
-            <Text style={styles.headerSub}>MODO JOGO</Text>
+            <Text style={styles.headerSub}>{t('custom_play_mode')}</Text>
           </View>
 
           {/* Editar */}
@@ -143,10 +145,10 @@ export default function CustomPlay() {
         <View style={[styles.txBar, { backgroundColor: txBg }]}>
           <Activity size={14} color={txTextColor} strokeWidth={2.5} />
           <Text style={[styles.txText, { color: txTextColor }]}>
-            {activeCmd ? activeCmd.toUpperCase() : 'AGUARDANDO'}
+            {activeCmd ? activeCmd.toUpperCase() : t('custom_play_waiting')}
           </Text>
           {!isConnected && (
-            <Text style={styles.simLabel}>SIMULANDO</Text>
+            <Text style={styles.simLabel}>{t('basic_simulating')}</Text>
           )}
         </View>
       )}
@@ -168,9 +170,9 @@ export default function CustomPlay() {
 
         {buttons.length === 0 && (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>Nenhum botão configurado</Text>
+            <Text style={styles.emptyTitle}>{t('custom_play_empty_title')}</Text>
             <Text style={styles.emptySub}>
-              Volte ao editor e adicione botões
+              {t('custom_play_empty_sub')}
             </Text>
           </View>
         )}
@@ -185,7 +187,7 @@ export default function CustomPlay() {
         >
           {/* Orientação */}
           <PlayFAB onPress={toggle} bg="#1C37B5">
-            <RotateCcw size={18} color="#fff" strokeWidth={2.5} />
+            <MobileRotateIcon color="#fff" />
           </PlayFAB>
 
           {/* STOP flutuante */}

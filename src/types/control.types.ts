@@ -28,4 +28,5 @@ export interface ScannedDevice {
   id: string;
   name: string;
   rssi: number;
+  type?: 'ble' | 'classic';
 }

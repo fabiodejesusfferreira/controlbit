@@ -1,13 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ControlButton, ControlProfile } from '../types/control.types';
+import { TranslationKey } from '../i18n/translations';
 
 const PROFILES_KEY = '@controlbit_profiles_v1';
 const ACTIVE_PROFILE_KEY = '@controlbit_active_profile';
 
-const DEFAULT_PROFILES: ControlProfile[] = [
+type TFunc = (key: TranslationKey) => string;
+
+const getDefaultProfiles = (t?: TFunc): ControlProfile[] => [
   {
     id: 'preset_car',
-    name: 'Carro Padrão',
+    name: t ? t('preset_car_name') : 'Carro Padrão',
     isDefault: true,
     orientation: 'portrait',
     buttons: [
@@ -15,7 +18,7 @@ const DEFAULT_PROFILES: ControlProfile[] = [
         id: 'b1',
         icon: 'arrow-up',
         command: 'up',
-        label: 'Frente',
+        label: t ? t('preset_btn_frente') : 'Frente',
         x: 120,
         y: 40,
         size: 80,
@@ -25,7 +28,7 @@ const DEFAULT_PROFILES: ControlProfile[] = [
         id: 'b2',
         icon: 'arrow-down',
         command: 'down',
-        label: 'Ré',
+        label: t ? t('preset_btn_re') : 'Ré',
         x: 120,
         y: 160,
         size: 80,
@@ -35,7 +38,7 @@ const DEFAULT_PROFILES: ControlProfile[] = [
         id: 'b3',
         icon: 'arrow-left',
         command: 'left',
-        label: 'Esq',
+        label: t ? t('preset_btn_esq') : 'Esq',
         x: 30,
         y: 100,
         size: 80,
@@ -45,7 +48,7 @@ const DEFAULT_PROFILES: ControlProfile[] = [
         id: 'b4',
         icon: 'arrow-right',
         command: 'right',
-        label: 'Dir',
+        label: t ? t('preset_btn_dir') : 'Dir',
         x: 210,
         y: 100,
         size: 80,
@@ -55,7 +58,7 @@ const DEFAULT_PROFILES: ControlProfile[] = [
         id: 'b5',
         icon: 'bell',
         command: 'horn',
-        label: 'Buzina',
+        label: t ? t('preset_btn_buzina') : 'Buzina',
         x: 120,
         y: 100,
         size: 80,
@@ -65,7 +68,7 @@ const DEFAULT_PROFILES: ControlProfile[] = [
   },
   {
     id: 'preset_arm',
-    name: 'Braço Robótico',
+    name: t ? t('preset_arm_name') : 'Braço Robótico',
     isDefault: true,
     orientation: 'landscape',
     buttons: [
@@ -73,7 +76,7 @@ const DEFAULT_PROFILES: ControlProfile[] = [
         id: 'c1',
         icon: 'rotate-cw',
         command: 'base_cw',
-        label: 'Base →',
+        label: t ? t('preset_btn_base_dir') : 'Base →',
         x: 180,
         y: 40,
         size: 90,
@@ -83,7 +86,7 @@ const DEFAULT_PROFILES: ControlProfile[] = [
         id: 'c2',
         icon: 'rotate-ccw',
         command: 'base_ccw',
-        label: 'Base ←',
+        label: t ? t('preset_btn_base_esq') : 'Base ←',
         x: 30,
         y: 40,
         size: 90,
@@ -93,7 +96,7 @@ const DEFAULT_PROFILES: ControlProfile[] = [
         id: 'c3',
         icon: 'maximize-2',
         command: 'claw_open',
-        label: 'Abrir',
+        label: t ? t('preset_btn_abrir') : 'Abrir',
         x: 30,
         y: 170,
         size: 90,
@@ -103,7 +106,7 @@ const DEFAULT_PROFILES: ControlProfile[] = [
         id: 'c4',
         icon: 'zap',
         command: 'claw_close',
-        label: 'Fechar',
+        label: t ? t('preset_btn_fechar') : 'Fechar',
         x: 180,
         y: 170,
         size: 90,
@@ -115,7 +118,7 @@ const DEFAULT_PROFILES: ControlProfile[] = [
 
 // ─── Helpers assíncronos internos ─────────────────────────────────────────────
 
-async function readStorage(): Promise<{
+async function readStorage(t?: TFunc): Promise<{
   profiles: ControlProfile[];
   activeId: string;
 }> {
@@ -129,16 +132,27 @@ async function readStorage(): Promise<{
       ? JSON.parse(rawProfiles)
       : [];
 
-    // Mescla perfis padrão + perfis salvos (sem duplicar IDs padrão)
-    const storedIds = stored.map((p) => p.id);
-    const defaults = DEFAULT_PROFILES.filter((d) => !storedIds.includes(d.id));
+    // Mescla perfis padrão + perfis salvos:
+    // - Perfis customizados são adicionados normalmente
+    // - Perfis padrão usam os botões salvos se existirem (para permitir edição)
+    const storedMap = new Map(stored.map((p) => [p.id, p]));
+    const defaults = getDefaultProfiles(t).map((d) => {
+      const savedVersion = storedMap.get(d.id);
+      if (savedVersion) {
+        // Usa meta do default (name, orientation) mas botões salvos
+        return { ...d, buttons: savedVersion.buttons };
+      }
+      return d;
+    });
+    const defaultIds = new Set(defaults.map((d) => d.id));
+    const customProfiles = stored.filter((p) => !defaultIds.has(p.id));
 
     return {
-      profiles: [...defaults, ...stored],
+      profiles: [...defaults, ...customProfiles],
       activeId: activeId ?? 'preset_car',
     };
   } catch {
-    return { profiles: DEFAULT_PROFILES, activeId: 'preset_car' };
+    return { profiles: getDefaultProfiles(t), activeId: 'preset_car' };
   }
 }
 
@@ -151,13 +165,13 @@ async function writeProfiles(profiles: ControlProfile[]): Promise<void> {
 // ─── API pública ──────────────────────────────────────────────────────────────
 
 export const CommandStorage = {
-  async getProfiles(): Promise<ControlProfile[]> {
-    const { profiles } = await readStorage();
+  async getProfiles(t?: TFunc): Promise<ControlProfile[]> {
+    const { profiles } = await readStorage(t);
     return profiles;
   },
 
-  async getActiveProfile(): Promise<ControlProfile> {
-    const { profiles, activeId } = await readStorage();
+  async getActiveProfile(t?: TFunc): Promise<ControlProfile> {
+    const { profiles, activeId } = await readStorage(t);
     return profiles.find((p) => p.id === activeId) ?? profiles[0];
   },
 
@@ -186,7 +200,8 @@ export const CommandStorage = {
     const idx = profiles.findIndex((p) => p.id === activeId);
     if (idx !== -1) {
       profiles[idx].buttons = buttons;
-      await writeProfiles(profiles);
+      // Persiste customizações mesmo em perfis padrão
+      await AsyncStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
     }
   },
 

@@ -56,9 +56,36 @@ function BottomRoutes() {
         },
       })}
     >
-      <TabScreen name="home" component={HomeScreen} />
-      <TabScreen name="basiccontrol" component={BasicControl} />
-      <TabScreen name="customcontrol" component={CustomControl} />
+      <TabScreen
+        name="home"
+        component={HomeScreen}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('home');
+          },
+        })}
+      />
+      <TabScreen
+        name="basiccontrol"
+        component={BasicControl}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('basiccontrol');
+          },
+        })}
+      />
+      <TabScreen
+        name="customcontrol"
+        component={CustomControl}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('customcontrol');
+          },
+        })}
+      />
     </TabNavigator>
   );
 }

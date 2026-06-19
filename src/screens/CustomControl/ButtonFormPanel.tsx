@@ -14,6 +14,7 @@ import { ControlButton } from '../../types/control.types';
 import { Icon } from '../../utils/iconMap';
 import IconPickerModal from '../../components/IconPickerModal';
 import { Colors, FontFamily } from '../../constants/theme';
+import { useLanguage } from '../../context/LanguageContext';
 
 const PICKER_COLORS = [
   '#FFD82D', '#22C55E', '#3B82F6', '#A855F7', '#F97316',
@@ -33,6 +34,7 @@ interface Props {
 
 function ButtonFormPanel({ button, onChange, onDelete, onClose }: Props) {
   const { width, height } = useWindowDimensions();
+  const { t } = useLanguage();
   const isLandscape = width > height;
   const [showIconPicker, setShowIconPicker] = useState(false);
   // Estado local do tamanho — só chama onChange no SlidingComplete
@@ -98,7 +100,7 @@ function ButtonFormPanel({ button, onChange, onDelete, onClose }: Props) {
 
       {/* Título + fechar */}
       <View style={styles.titleRow}>
-        <Text style={styles.title}>Editar Botão</Text>
+        <Text style={styles.title}>{t('custom_form_title')}</Text>
         <View style={{ position: 'relative' }}>
           <View style={styles.closeShadow} />
           <TouchableOpacity
@@ -171,12 +173,12 @@ function ButtonFormPanel({ button, onChange, onDelete, onClose }: Props) {
             <View style={styles.landscapeRight}>
               {/* NOME */}
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>NOME</Text>
+                <Text style={styles.fieldLabel}>{t('custom_form_name')}</Text>
                 <TextInput
                   style={styles.input}
                   value={button.label}
                   onChangeText={handleLabelChange}
-                  placeholder="Ex: Frente"
+                  placeholder={t('custom_form_name_placeholder')}
                   placeholderTextColor="#bbb"
                   maxLength={20}
                 />
@@ -184,7 +186,7 @@ function ButtonFormPanel({ button, onChange, onDelete, onClose }: Props) {
 
               {/* COMANDO */}
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>COMANDO</Text>
+                <Text style={styles.fieldLabel}>{t('custom_form_command')}</Text>
                 <TextInput
                   style={styles.input}
                   value={button.command}
@@ -200,7 +202,7 @@ function ButtonFormPanel({ button, onChange, onDelete, onClose }: Props) {
               {/* TAMANHO */}
               <View style={styles.field}>
                 <View style={styles.fieldHeader}>
-                  <Text style={styles.fieldLabel}>TAMANHO</Text>
+                  <Text style={styles.fieldLabel}>{t('custom_form_size')}</Text>
                   <View style={{ position: 'relative' }}>
                     <View style={styles.badgeShadow} />
                     <View style={styles.badge}>
@@ -231,7 +233,7 @@ function ButtonFormPanel({ button, onChange, onDelete, onClose }: Props) {
                     activeOpacity={0.85}
                   >
                     <Trash2 size={16} color="#fff" strokeWidth={2.5} />
-                    <Text style={styles.actionText}>EXCLUIR</Text>
+                    <Text style={styles.actionText}>{t('custom_form_delete')}</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -243,7 +245,7 @@ function ButtonFormPanel({ button, onChange, onDelete, onClose }: Props) {
                     activeOpacity={0.85}
                   >
                     <Check size={16} color="#fff" strokeWidth={3} />
-                    <Text style={styles.actionText}>SALVAR</Text>
+                    <Text style={styles.actionText}>{t('custom_save')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -301,12 +303,12 @@ function ButtonFormPanel({ button, onChange, onDelete, onClose }: Props) {
 
             {/* NOME */}
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>NOME</Text>
+              <Text style={styles.fieldLabel}>{t('custom_form_name')}</Text>
               <TextInput
                 style={styles.input}
                 value={button.label}
                 onChangeText={handleLabelChange}
-                placeholder="Ex: Frente"
+                placeholder={t('custom_form_name_placeholder')}
                 placeholderTextColor="#bbb"
                 maxLength={20}
               />
@@ -314,7 +316,7 @@ function ButtonFormPanel({ button, onChange, onDelete, onClose }: Props) {
 
             {/* COMANDO */}
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>COMANDO</Text>
+              <Text style={styles.fieldLabel}>{t('custom_form_command')}</Text>
               <TextInput
                 style={styles.input}
                 value={button.command}
@@ -330,7 +332,7 @@ function ButtonFormPanel({ button, onChange, onDelete, onClose }: Props) {
             {/* TAMANHO */}
             <View style={styles.field}>
               <View style={styles.fieldHeader}>
-                <Text style={styles.fieldLabel}>TAMANHO</Text>
+                <Text style={styles.fieldLabel}>{t('custom_form_size')}</Text>
                 <View style={{ position: 'relative' }}>
                   <View style={styles.badgeShadow} />
                   <View style={styles.badge}>
@@ -361,7 +363,7 @@ function ButtonFormPanel({ button, onChange, onDelete, onClose }: Props) {
                   activeOpacity={0.85}
                 >
                   <Trash2 size={16} color="#fff" strokeWidth={2.5} />
-                  <Text style={styles.actionText}>EXCLUIR</Text>
+                  <Text style={styles.actionText}>{t('custom_form_delete')}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -373,7 +375,7 @@ function ButtonFormPanel({ button, onChange, onDelete, onClose }: Props) {
                   activeOpacity={0.85}
                 >
                   <Check size={16} color="#fff" strokeWidth={3} />
-                  <Text style={styles.actionText}>SALVAR</Text>
+                  <Text style={styles.actionText}>{t('custom_save')}</Text>
                 </TouchableOpacity>
               </View>
             </View>

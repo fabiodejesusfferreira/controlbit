@@ -18,6 +18,7 @@ import {
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useBluetooth } from '../../context/BluetoothContext';
+import { useLanguage } from '../../context/LanguageContext';
 import ControlPad from '../../components/ControlPad';
 import ServoSlider from '../../components/ServoSlider';
 import BluetoothStatusButton from '../../components/BluetoothButton';
@@ -42,6 +43,7 @@ export default function BasicControl() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { isConnected, sendCommand } = useBluetooth();
+  const { t } = useLanguage();
   const [commandLog, setCommandLog] = useState<string[]>([]);
   const [activeCmd, setActiveCmd] = useState('');
 
@@ -97,10 +99,10 @@ export default function BasicControl() {
         {/* Titles */}
         <View className="flex-1">
           <Text className="font-[SpaceGrotesk-Bold] text-white text-sm leading-5 tracking-widest">
-            COMO CONFIGURAR O MICRO:BIT
+            {t('basic_header_title')}
           </Text>
           <Text className="font-[SpaceMono-Regular] text-[#BFC8E8] text-[10px] tracking-wider">
-            D-PAD + SERVOS
+            {t('basic_header_sub')}
           </Text>
         </View>
 
@@ -126,7 +128,7 @@ export default function BasicControl() {
         </Text>
         {!isConnected && (
           <Text className="font-[SpaceMono-Bold] text-[9px] text-red-400">
-            SIMULANDO
+            {t('basic_simulating')}
           </Text>
         )}
       </View>
@@ -151,7 +153,7 @@ export default function BasicControl() {
           {/* Section header */}
           <View className="flex-row items-center justify-between px-4 py-2 bg-[#1C37B5] border-b-[3px] border-[#1A1A1A]">
             <Text className="font-[SpaceMono-Bold] text-white text-[12px] tracking-widest">
-              DIREÇÃO
+              {t('basic_direction')}
             </Text>
             {/* Direction indicators */}
             <View className="flex-row" style={{ gap: 4 }}>
@@ -195,7 +197,7 @@ export default function BasicControl() {
         >
           <StopCircle size={22} color="#fff" strokeWidth={2.5} />
           <Text className="font-[SpaceGrotesk-Bold] text-white text-base tracking-widest">
-            PARAR
+            {t('basic_stop')}
           </Text>
         </TouchableOpacity>
 
@@ -213,7 +215,7 @@ export default function BasicControl() {
           {/* Section header */}
           <View className="flex-row items-center justify-between px-4 py-2 bg-[#1C37B5] border-b-[3px] border-[#1A1A1A]">
             <Text className="font-[SpaceMono-Bold] text-white text-[12px] tracking-widest">
-              SERVOS
+              {t('basic_servos')}
             </Text>
             <Text className="font-[SpaceMono-Regular] text-[#BFC8E8] text-[9px]">
               0° → 180°

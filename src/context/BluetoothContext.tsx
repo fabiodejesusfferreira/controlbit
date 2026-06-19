@@ -1,16 +1,25 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, ReactNode } from "react";
+import React, {
+  createContext, useContext, useState, useEffect,
+  useMemo, useCallback, useRef, ReactNode,
+} from "react";
 import { Platform, PermissionsAndroid, Alert } from "react-native";
-import { BleManager, Device } from "react-native-ble-plx";
+import { BleManager, Device as BleDevice } from "react-native-ble-plx";
+import RNBluetoothClassic, {
+  BluetoothDevice as ClassicDevice,
+  BluetoothEventSubscription,
+} from "react-native-bluetooth-classic";
 import { BluetoothStatus, ScannedDevice } from "../types/control.types";
 
-// UUIDs CORRIGIDOS (UART Service)
+// ─── BLE UUIDs ────────────────────────────────────────────────────────────────
 const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-const UART_TX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // Notify
-const UART_RX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // Write
+const UART_RX_UUID      = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+const HM10_SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
+const HM10_CHAR_UUID    = "0000ffe1-0000-1000-8000-00805f9b34fb";
 
+// ─── Tipos ────────────────────────────────────────────────────────────────────
 interface BluetoothContextData {
   status: BluetoothStatus;
-  device: Device | null;
+  device: BleDevice | ClassicDevice | null;
   isConnected: boolean;
   isScanning: boolean;
   bluetoothEnabled: boolean;
@@ -23,19 +32,34 @@ interface BluetoothContextData {
 }
 
 export const BluetoothContext = createContext<BluetoothContextData>(
-  {} as BluetoothContextData
+  {} as BluetoothContextData,
 );
 
+// ─── Provider ─────────────────────────────────────────────────────────────────
 export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
-  const [manager] = useState(new BleManager());
-  const [device, setDevice] = useState<Device | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isScanning, setIsScanning] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [manager] = useState(() => new BleManager());
+
+  const [bleDevice,     setBleDevice]     = useState<BleDevice | null>(null);
+  const [classicDevice, setClassicDevice] = useState<ClassicDevice | null>(null);
+  const [isConnected,   setIsConnected]   = useState(false);
+  const [isScanning,    setIsScanning]    = useState(false);
+  const [isConnecting,  setIsConnecting]  = useState(false);
   const [scannedDevices, setScannedDevices] = useState<ScannedDevice[]>([]);
   const [bluetoothEnabled, setBluetoothEnabled] = useState(false);
 
-  // Deriva status a partir dos estados booleanos
+  // Refs para sendCommand sem recriar o callback
+  const bleRef     = useRef<BleDevice | null>(null);
+  const classicRef = useRef<ClassicDevice | null>(null);
+  bleRef.current     = bleDevice;
+  classicRef.current = classicDevice;
+
+  // Protocolo BLE ativo: 'hm10' | 'uart' | null
+  const bleProtocolRef = useRef<"hm10" | "uart" | null>(null);
+
+  // Subscription de desconexão clássica
+  const classicDisconnectSub = useRef<BluetoothEventSubscription | null>(null);
+
+  // Status derivado
   const status: BluetoothStatus = isConnected
     ? "connected"
     : isConnecting
@@ -44,171 +68,222 @@ export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
     ? "scanning"
     : "disconnected";
 
-  // Monitora estado do adaptador Bluetooth
+  // ── Monitora estado do adaptador BLE ────────────────────────────────────────
   useEffect(() => {
     const sub = manager.onStateChange((state) => {
-      setBluetoothEnabled(state === 'PoweredOn');
-    }, true); // true = emite o estado atual imediatamente
+      setBluetoothEnabled(state === "PoweredOn");
+    }, true);
     return () => sub.remove();
   }, [manager]);
 
-  // Cleanup na desmontagem
+  // ── Monitora estado do adaptador Clássico ───────────────────────────────────
+  useEffect(() => {
+    RNBluetoothClassic.isBluetoothEnabled()
+      .then(setBluetoothEnabled)
+      .catch(() => {});
+
+    const en  = RNBluetoothClassic.onBluetoothEnabled(() => setBluetoothEnabled(true));
+    const dis = RNBluetoothClassic.onBluetoothDisabled(() => setBluetoothEnabled(false));
+    return () => { en.remove(); dis.remove(); };
+  }, []);
+
+  // ── Cleanup na desmontagem ───────────────────────────────────────────────────
   useEffect(() => {
     return () => {
       manager.destroy();
+      classicDisconnectSub.current?.remove();
     };
   }, [manager]);
 
+  // ── Permissões ───────────────────────────────────────────────────────────────
   const requestPermissions = useCallback(async () => {
-    if (Platform.OS === "android") {
-      if (Platform.Version >= 31) {
-        await PermissionsAndroid.requestMultiple([
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        ]);
-      } else {
-        await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
-        );
-      }
+    if (Platform.OS !== "android") return;
+    if (Platform.Version >= 31) {
+      await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      ]);
+    } else {
+      await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      );
     }
   }, []);
 
+  // ── Stop Scan ────────────────────────────────────────────────────────────────
   const stopScan = useCallback(() => {
     manager.stopDeviceScan();
+    RNBluetoothClassic.cancelDiscovery().catch(() => {});
     setIsScanning(false);
-    console.log("LOG: Scan finalizado.");
   }, [manager]);
 
+  // ── Start Scan ───────────────────────────────────────────────────────────────
   const startScan = useCallback(async () => {
     await requestPermissions();
-
     if (isScanning) return;
 
-    setScannedDevices([]); // Limpa lista anterior
+    setScannedDevices([]);
     setIsScanning(true);
-    console.log("LOG: Iniciando Scan Manual...");
 
-    manager.startDeviceScan(null, null, (error, scannedDevice) => {
-      if (error) {
-        console.warn("Erro no scan:", error);
-        setIsScanning(false);
-        return;
+    // 1. Dispositivos Clássicos PAREADOS (HC-05/HC-06) — aparecem imediatamente
+    try {
+      const bonded = await RNBluetoothClassic.getBondedDevices();
+      const classicList: ScannedDevice[] = bonded.map(d => ({
+        id:   d.address,
+        name: d.name || "HC-05 / HC-06",
+        rssi: -50,
+        type: "classic" as const,
+      }));
+      if (classicList.length > 0) {
+        setScannedDevices(classicList);
       }
+    } catch (err) {
+      console.warn("[BT] Erro ao buscar dispositivos pareados:", err);
+    }
 
-      // Filtra apenas micro:bits e evita duplicados na lista
-      if (
-        scannedDevice &&
-        scannedDevice.name &&
-        scannedDevice.name.includes("micro:bit")
-      ) {
-        const simplified: ScannedDevice = {
-          id: scannedDevice.id,
-          name: scannedDevice.name,
-          rssi: scannedDevice.rssi ?? -100,
-        };
-        setScannedDevices((prevDevices) => {
-          if (!prevDevices.some((d) => d.id === simplified.id)) {
-            return [...prevDevices, simplified];
-          }
-          return prevDevices;
+    // 2. Scan BLE (HM-10, HC-08, Micro:bit…)
+    manager.startDeviceScan(null, null, (error, scanned) => {
+      if (error) { setIsScanning(false); return; }
+      if (scanned?.name) {
+        setScannedDevices(prev => {
+          if (prev.some(d => d.id === scanned.id)) return prev;
+          return [...prev, {
+            id:   scanned.id,
+            name: scanned.name!,
+            rssi: scanned.rssi ?? -100,
+            type: "ble" as const,
+          }];
         });
       }
     });
 
-    // Timeout de segurança: para o scan após 10 segundos
-    setTimeout(() => {
-      stopScan();
-    }, 10000);
+    setTimeout(() => stopScan(), 12000);
   }, [manager, isScanning, requestPermissions, stopScan]);
 
+  // ── Connect ──────────────────────────────────────────────────────────────────
   const connectToDevice = useCallback(async (deviceInfo: ScannedDevice) => {
-    stopScan(); // Garante que parou de escanear
+    stopScan();
     setIsConnecting(true);
 
     try {
-      console.log(`LOG: Conectando ao ${deviceInfo.name}...`);
+      // ── Bluetooth Clássico (HC-05 / HC-06) ──────────────────────────────────
+      if (deviceInfo.type === "classic") {
+        const connected = await RNBluetoothClassic.connectToDevice(deviceInfo.id);
 
-      const options = { requestMTU: 23, autoConnect: false };
-      const connectedDevice = await manager.connectToDevice(deviceInfo.id, options);
+        // Escuta desconexão inesperada
+        classicDisconnectSub.current?.remove();
+        classicDisconnectSub.current = RNBluetoothClassic.onDeviceDisconnected(
+          ({ device: dev }) => {
+            if ((dev as any)?.address === deviceInfo.id) {
+              setClassicDevice(null);
+              setIsConnected(false);
+              bleProtocolRef.current = null;
+              classicDisconnectSub.current?.remove();
+            }
+          },
+        );
 
-      // Tratamento Android RefreshGatt
+        setClassicDevice(connected);
+        setIsConnected(true);
+        setIsConnecting(false);
+        return;
+      }
+
+      // ── BLE (HM-10 / HC-08 / Micro:bit) ────────────────────────────────────
+      const connected = await manager.connectToDevice(deviceInfo.id, {
+        requestMTU: 23,
+        autoConnect: false,
+      });
+
       if (Platform.OS === "android") {
         try {
           // @ts-ignore
-          if (typeof connectedDevice.refreshGatt === "function") {
-            // @ts-ignore
-            await connectedDevice.refreshGatt();
-            await new Promise((r) => setTimeout(r, 500));
-          }
-        } catch (e) {}
+          if (typeof connected.refreshGatt === "function") await connected.refreshGatt();
+        } catch (_) {}
       }
 
-      await connectedDevice.discoverAllServicesAndCharacteristics();
+      await connected.discoverAllServicesAndCharacteristics();
+      const services = await connected.services();
 
-      // Listener de desconexão
-      connectedDevice.onDisconnected(() => {
-        console.log("LOG: Dispositivo desconectado.");
+      let protocol: "hm10" | "uart" | null = null;
+      for (const svc of services) {
+        const id = svc.uuid.toLowerCase();
+        if (id.includes("ffe0"))     { protocol = "hm10"; break; }
+        if (id.includes("6e400001")) { protocol = "uart"; break; }
+      }
+      bleProtocolRef.current = protocol;
+
+      connected.onDisconnected(() => {
+        setBleDevice(null);
         setIsConnected(false);
-        setIsConnecting(false);
-        setDevice(null);
+        bleProtocolRef.current = null;
       });
 
-      setDevice(connectedDevice);
+      setBleDevice(connected);
       setIsConnected(true);
       setIsConnecting(false);
-      console.log("LOG: Conectado com sucesso!");
     } catch (e) {
-      console.error("LOG: Erro na conexão", e);
+      console.error("[BT] Erro na conexão:", e);
       setIsConnecting(false);
-      Alert.alert("Erro", "Falha ao conectar. Tente reiniciar o micro:bit.");
-      try {
-        await manager.cancelDeviceConnection(deviceInfo.id);
-      } catch (err) {}
+      Alert.alert(
+        "Erro de Conexão",
+        "Não foi possível conectar ao dispositivo.\n\nPara HC-05/HC-06, certifique-se de que o módulo está pareado nas configurações do Android.",
+      );
     }
   }, [manager, stopScan]);
 
+  // ── Disconnect ───────────────────────────────────────────────────────────────
   const disconnect = useCallback(async () => {
-    if (device) {
-      try {
-        await device.cancelConnection();
-      } catch (e) {}
-      setDevice(null);
-      setIsConnected(false);
-    }
-  }, [device]);
-
-  // Usa ref para device/isConnected para evitar recriar sendCommand a cada mudança
-  const deviceRef = useRef(device);
-  const isConnectedRef = useRef(isConnected);
-  deviceRef.current = device;
-  isConnectedRef.current = isConnected;
-
-  const sendCommand = useCallback(async (command: string) => {
-    if (!deviceRef.current || !isConnectedRef.current) return;
+    classicDisconnectSub.current?.remove();
+    classicDisconnectSub.current = null;
     try {
-      const commandWithNewLine = command + "\n";
+      if (bleRef.current)     await bleRef.current.cancelConnection();
+      if (classicRef.current) await classicRef.current.disconnect();
+    } catch (_) {}
+    setBleDevice(null);
+    setClassicDevice(null);
+    setIsConnected(false);
+    bleProtocolRef.current = null;
+  }, []);
+
+  // ── Send Command ─────────────────────────────────────────────────────────────
+  const sendCommand = useCallback(async (command: string) => {
+    const cmdNL = command + "\n";
+
+    try {
+      // Clássico (HC-05/HC-06) — texto puro via SPP
+      if (classicRef.current) {
+        await classicRef.current.write(cmdNL);
+        return;
+      }
+
+      // BLE — base64 via characteristic
+      if (!bleRef.current) return;
       const payload =
         typeof btoa !== "undefined"
-          ? btoa(commandWithNewLine)
-          : Buffer.from(commandWithNewLine).toString("base64");
+          ? btoa(cmdNL)
+          : Buffer.from(cmdNL).toString("base64");
 
-      await deviceRef.current.writeCharacteristicWithoutResponseForService(
-        UART_SERVICE_UUID,
-        UART_RX_UUID,
-        payload
-      );
+      const proto = bleProtocolRef.current;
+      if (proto === "hm10") {
+        await bleRef.current.writeCharacteristicWithoutResponseForService(
+          HM10_SERVICE_UUID, HM10_CHAR_UUID, payload,
+        );
+      } else {
+        await bleRef.current.writeCharacteristicWithoutResponseForService(
+          UART_SERVICE_UUID, UART_RX_UUID, payload,
+        );
+      }
     } catch (e) {
-      console.error(`Erro envio ${command}:`, e);
+      console.error(`[BT] Erro ao enviar "${command}":`, e);
     }
   }, []);
 
-  // Memoiza o valor do contexto — evita re-render de todos os consumidores
-  // quando apenas um campo muda (ex: scannedDevices durante o scan)
+  // ── Valor do contexto ────────────────────────────────────────────────────────
   const contextValue = useMemo(() => ({
     status,
-    device,
+    device: (bleDevice ?? classicDevice) as BleDevice | ClassicDevice | null,
     isConnected,
     isScanning,
     bluetoothEnabled,
@@ -219,8 +294,9 @@ export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
     disconnect,
     sendCommand,
   }), [
-    status, device, isConnected, isScanning, bluetoothEnabled,
-    scannedDevices, startScan, stopScan, connectToDevice, disconnect, sendCommand,
+    status, bleDevice, classicDevice, isConnected, isScanning,
+    bluetoothEnabled, scannedDevices, startScan, stopScan,
+    connectToDevice, disconnect, sendCommand,
   ]);
 
   return (
@@ -230,5 +306,4 @@ export const BluetoothProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-// Hook de conveniência para consumir o contexto
 export const useBluetooth = () => useContext(BluetoothContext);

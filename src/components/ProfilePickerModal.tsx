@@ -4,19 +4,20 @@ import {
   View,
   Text,
   TouchableOpacity,
-  FlatList,
   StyleSheet,
   Animated,
   Easing,
   TextInput,
   ActivityIndicator,
   Alert,
-  ListRenderItemInfo,
+  ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { X, Plus, Trash2, Check, Lock } from 'lucide-react-native';
 import { ControlProfile } from '../types/control.types';
 import { CommandStorage } from '../services/storage';
 import { Colors, FontFamily, Shadow } from '../constants/theme';
+import { useLanguage } from '../context/LanguageContext';
 
 const CARD_COLORS = [
   '#FFD82D', '#FF6B00', '#22C55E',
@@ -48,6 +49,7 @@ const ProfileRow = memo(function ProfileRow({
   onDelete,
 }: ProfileRowProps) {
   const bgColor = CARD_COLORS[index % CARD_COLORS.length];
+  const { t } = useLanguage();
 
   return (
     <View style={{ position: 'relative', marginBottom: 10 }}>
@@ -77,8 +79,8 @@ const ProfileRow = memo(function ProfileRow({
             {item.name}
           </Text>
           <Text style={styles.profileMeta}>
-            {item.buttons.length} botão(ões)
-            {item.isDefault ? ' · Padrão' : ''}
+            {item.buttons.length} {t('custom_buttons_unit')}
+            {item.isDefault ? ` · ${t('custom_profile_default')}` : ''}
           </Text>
         </View>
 
@@ -112,6 +114,9 @@ export default function ProfilePickerModal({
   onSelect,
   onRefresh,
 }: Props) {
+  const { t } = useLanguage();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
   const [creating, setCreating]       = useState(false);
   const [newName, setNewName]         = useState('');
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
@@ -146,7 +151,7 @@ export default function ProfilePickerModal({
       // Fecha modal DEPOIS de tudo estar pronto
       onClose();
     } catch {
-      Alert.alert('Erro', 'Não foi possível criar o perfil.');
+      Alert.alert(t('custom_profile_error_title'), t('custom_profile_error_msg'));
     } finally {
       setLoading(false);
     }
@@ -155,12 +160,12 @@ export default function ProfilePickerModal({
   // ── Deletar perfil ──────────────────────────────────────────────────────────
   const handleDelete = useCallback(async (id: string) => {
     Alert.alert(
-      'Excluir perfil',
-      'Tem certeza? Esta ação não pode ser desfeita.',
+      t('custom_profile_delete_title'),
+      t('custom_profile_delete_msg'),
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: t('custom_profile_cancel'), style: 'cancel' },
         {
-          text: 'Excluir',
+          text: t('custom_form_delete'),
           style: 'destructive',
           onPress: async () => {
             await CommandStorage.deleteProfile(id);
@@ -183,22 +188,6 @@ export default function ProfilePickerModal({
     }, 50);
   }, [onClose, onSelect]);
 
-  // ── Render item (stable reference) ─────────────────────────────────────────
-  const renderItem = useCallback(
-    ({ item, index }: ListRenderItemInfo<ControlProfile>) => (
-      <ProfileRow
-        item={item}
-        index={index}
-        isActive={item.id === activeId}
-        onSelect={handleSelect}
-        onDelete={handleDelete}
-      />
-    ),
-    [activeId, handleSelect, handleDelete],
-  );
-
-  const keyExtractor = useCallback((p: ControlProfile) => p.id, []);
-
   return (
     <Modal
       transparent
@@ -214,17 +203,25 @@ export default function ProfilePickerModal({
       >
         {/* Bloco vazio para não propagar toque para o sheet */}
         <Animated.View
-          style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
+          style={[
+            styles.sheet,
+            { transform: [{ translateY: slideAnim }] },
+            isLandscape && { maxHeight: '95%' },
+          ]}
         >
           {/* Impede que toque no sheet feche o modal */}
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
 
             {/* Header */}
             <View style={styles.header}>
               <View>
-                <Text style={styles.headerTitle}>PERFIS</Text>
+                <Text style={styles.headerTitle}>{t('custom_profiles_title')}</Text>
                 <Text style={styles.headerSub}>
-                  {profiles.length} perfil(s)
+                  {profiles.length} {t('custom_profiles_unit')}
                 </Text>
               </View>
               <View style={{ position: 'relative' }}>
@@ -242,17 +239,18 @@ export default function ProfilePickerModal({
             <View style={styles.divider} />
 
             {/* Lista */}
-            <FlatList
-              data={profiles}
-              keyExtractor={keyExtractor}
-              renderItem={renderItem}
-              contentContainerStyle={styles.list}
-              showsVerticalScrollIndicator={false}
-              style={{ maxHeight: 320 }}
-              // Perf
-              removeClippedSubviews={false}
-              windowSize={5}
-            />
+            <View style={styles.list}>
+              {profiles.map((item, index) => (
+                <ProfileRow
+                  key={item.id}
+                  item={item}
+                  index={index}
+                  isActive={item.id === activeId}
+                  onSelect={handleSelect}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </View>
 
             {/* Área de criação */}
             <View style={styles.createArea}>
@@ -265,7 +263,7 @@ export default function ProfilePickerModal({
                     style={styles.input}
                     value={newName}
                     onChangeText={setNewName}
-                    placeholder="Nome do perfil..."
+                    placeholder={t('custom_profile_placeholder')}
                     placeholderTextColor="#999"
                     autoFocus
                     returnKeyType="done"
@@ -284,7 +282,7 @@ export default function ProfilePickerModal({
                         onPress={() => setOrientation(o)}
                       >
                         <Text style={styles.orientLabel}>
-                          {o === 'portrait' ? '📱 Retrato' : '⬛ Paisagem'}
+                          {o === 'portrait' ? t('custom_profile_portrait') : t('custom_profile_landscape')}
                         </Text>
                       </TouchableOpacity>
                     ))}
@@ -294,7 +292,7 @@ export default function ProfilePickerModal({
                     {loading ? (
                       <View style={styles.loadingBox}>
                         <ActivityIndicator color={Colors.dark} size="small" />
-                        <Text style={styles.loadingText}>Criando...</Text>
+                        <Text style={styles.loadingText}>{t('custom_profile_creating')}</Text>
                       </View>
                     ) : (
                       <>
@@ -306,7 +304,7 @@ export default function ProfilePickerModal({
                             activeOpacity={0.85}
                           >
                             <Check size={16} color="#fff" strokeWidth={3} />
-                            <Text style={styles.confirmText}>CRIAR</Text>
+                            <Text style={styles.confirmText}>{t('custom_profile_create')}</Text>
                           </TouchableOpacity>
                         </View>
 
@@ -321,7 +319,7 @@ export default function ProfilePickerModal({
                             activeOpacity={0.85}
                           >
                             <X size={16} color="#fff" strokeWidth={3} />
-                            <Text style={styles.cancelText}>CANCELAR</Text>
+                            <Text style={styles.cancelText}>{t('custom_profile_cancel')}</Text>
                           </TouchableOpacity>
                         </View>
                       </>
@@ -337,12 +335,13 @@ export default function ProfilePickerModal({
                     activeOpacity={0.85}
                   >
                     <Plus size={18} strokeWidth={3} color={Colors.dark} />
-                    <Text style={styles.newProfileText}>NOVO PERFIL</Text>
+                    <Text style={styles.newProfileText}>{t('custom_profile_new')}</Text>
                   </TouchableOpacity>
                 </View>
               )}
             </View>
 
+            </ScrollView>
           </TouchableOpacity>
         </Animated.View>
       </TouchableOpacity>

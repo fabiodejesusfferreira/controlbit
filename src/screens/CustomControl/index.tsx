@@ -18,7 +18,6 @@ import Svg, { Circle, Defs, Pattern, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ArrowLeft, Plus, Save, Play, ChevronDown, Check,
-  RotateCcw,
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { ControlButton, ControlProfile } from '../../types/control.types';
@@ -30,10 +29,13 @@ import ButtonFormPanel from './ButtonFormPanel';
 import { Colors, FontFamily } from '../../constants/theme';
 import { RootStackNavigationProp } from '../../types/navigation.types';
 import { useScreenOrientation } from '../../hooks/useScreenOrientation';
+import { useLanguage } from '../../context/LanguageContext';
+import MobileRotateIcon from '../../components/icons/MobileRotateIcon';
 
 export default function CustomControl() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
 
   // ── Orientação ──────────────────────────────────────────────────────────────
   const { orientation, toggle, isLandscape } = useScreenOrientation('portrait');
@@ -108,8 +110,8 @@ export default function CustomControl() {
   // ── Carregar dados ──────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     const [allProfiles, active] = await Promise.all([
-      CommandStorage.getProfiles(),
-      CommandStorage.getActiveProfile(),
+      CommandStorage.getProfiles(t),
+      CommandStorage.getActiveProfile(t),
     ]);
     setProfiles(allProfiles);
     setActiveId(active.id);
@@ -139,7 +141,7 @@ export default function CustomControl() {
       id: `btn_${Date.now()}`,
       icon: 'zap',
       command: 'cmd',
-      label: 'Botão',
+      label: t('custom_default_btn_label'),
       x: 20 + (buttons.length % 4) * 90,
       y: 20 + Math.floor(buttons.length / 4) * 100,
       size: 80,
@@ -228,13 +230,13 @@ export default function CustomControl() {
           </TouchableOpacity>
 
           <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>EDITOR</Text>
+            <Text style={styles.headerTitle}>{t('custom_header_title')}</Text>
             <TouchableOpacity
               style={styles.profileBtn}
               onPress={() => setShowProfilePicker(true)}
               activeOpacity={0.8}
             >
-              <Text style={styles.profilePrefix}>PERFIL: </Text>
+              <Text style={styles.profilePrefix}>{t('custom_profile')}</Text>
               <Text style={styles.profileName} numberOfLines={1}>
                 {activeProfile?.name ?? '—'}
               </Text>
@@ -249,10 +251,10 @@ export default function CustomControl() {
       {/* ── Toolbar — oculta no landscape ──────────────────────────── */}
       {!isLandscape && (
         <View style={styles.toolbar}>
-          <Text style={styles.countLabel}>{buttons.length}/12 botões</Text>
+          <Text style={styles.countLabel}>{buttons.length}/12 {t('custom_buttons_unit')}</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <ToolbarBtn
-              label="BOTÃO"
+              label={t('custom_add')}
               bg="#FFD82D"
               textColor={Colors.dark}
               icon={<Plus size={13} strokeWidth={3} color={Colors.dark} />}
@@ -260,7 +262,7 @@ export default function CustomControl() {
               disabled={buttons.length >= 12}
             />
             <ToolbarBtn
-              label={saved ? 'SALVO!' : 'SALVAR'}
+              label={saved ? t('custom_saved') : t('custom_save')}
               bg="#1C37B5"
               textColor="#fff"
               icon={saved
@@ -269,7 +271,7 @@ export default function CustomControl() {
               onPress={handleSave}
             />
             <ToolbarBtn
-              label="PLAY"
+              label={t('custom_play')}
               bg="#E81C1C"
               textColor="#fff"
               icon={<Play size={13} color="#fff" strokeWidth={2.5} fill="#fff" />}
@@ -315,8 +317,8 @@ export default function CustomControl() {
             <View style={styles.emptyIcon}>
               <Plus size={28} color="#ccc" strokeWidth={2.5} />
             </View>
-            <Text style={styles.emptyTitle}>Adicione botões acima</Text>
-            <Text style={styles.emptySub}>Máx. 12 botões por perfil</Text>
+            <Text style={styles.emptyTitle}>{t('custom_empty_state_title')}</Text>
+            <Text style={styles.emptySub}>{t('custom_empty_state_sub')}</Text>
           </View>
         )}
 
@@ -324,7 +326,7 @@ export default function CustomControl() {
         <View style={styles.fabColumn}>
           {/* Orientação */}
           <FAB onPress={toggle} bg="#1C37B5">
-            <RotateCcw size={18} color="#fff" strokeWidth={2.5} />
+            <MobileRotateIcon color="#fff" />
           </FAB>
 
           {/* Landscape: botões de toolbar como FABs */}
@@ -354,7 +356,7 @@ export default function CustomControl() {
       {!isLandscape && (
         <View style={styles.hintBar}>
           <Text style={styles.hintText}>
-            Arraste para mover  •  TOQUE para editar
+            {t('custom_hint')}
           </Text>
         </View>
       )}

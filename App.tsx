@@ -7,6 +7,8 @@ import * as SplashScreen from "expo-splash-screen";
 import { Routes } from './src/routes';
 import * as Font from "expo-font";
 import { BluetoothProvider } from "./src/context/BluetoothContext";
+import { LanguageProvider } from "./src/context/LanguageContext";
+
 
 SplashScreen.preventAutoHideAsync();
 
@@ -43,9 +45,11 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <BluetoothProvider>
-        <Routes />
-      </BluetoothProvider>
+      <LanguageProvider>
+        <BluetoothProvider>
+          <Routes />
+        </BluetoothProvider>
+      </LanguageProvider>
     </SafeAreaProvider>
   );
 }

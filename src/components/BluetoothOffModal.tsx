@@ -8,12 +8,23 @@ import {
   Animated,
   Easing,
   Platform,
+  Linking,
 } from 'react-native';
 import { BluetoothOff, Settings, X } from 'lucide-react-native';
 import { Colors, FontFamily, Shadow } from '../constants/theme';
 
 interface Props {
   onClose: () => void;
+}
+
+function openBluetoothSettings() {
+  if (Platform.OS === 'android') {
+    Linking.sendIntent('android.settings.BLUETOOTH_SETTINGS').catch(() =>
+      Linking.openSettings(),
+    );
+  } else {
+    Linking.openURL('App-Prefs:Bluetooth').catch(() => Linking.openSettings());
+  }
 }
 
 export default function BluetoothOffModal({ onClose }: Props) {
@@ -130,16 +141,16 @@ export default function BluetoothOffModal({ onClose }: Props) {
             </View>
           </View>
 
-          {/* Botão fechar */}
+          {/* Botão ligar Bluetooth */}
           <View style={styles.footer}>
             <View style={{ flex: 1, position: 'relative' }}>
               <View style={[styles.btnShadow]} />
               <TouchableOpacity
-                style={styles.dismissBtn}
-                onPress={onClose}
+                style={styles.enableBtn}
+                onPress={openBluetoothSettings}
                 activeOpacity={0.85}
               >
-                <Text style={styles.dismissText}>ENTENDI</Text>
+                <Text style={styles.enableText}>LIGAR BLUETOOTH</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -293,18 +304,18 @@ const styles = StyleSheet.create({
     bottom: -4,
     backgroundColor: Colors.dark,
   },
-  dismissBtn: {
-    backgroundColor: Colors.dark,
+  enableBtn: {
+    backgroundColor: '#0066FF',
     borderWidth: 3,
     borderColor: Colors.dark,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dismissText: {
+  enableText: {
     fontFamily: FontFamily.title,
     fontSize: 14,
-    color: '#FFD82D',
+    color: '#fff',
     letterSpacing: 1,
   },
 });

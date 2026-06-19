@@ -95,7 +95,7 @@ export default function DeviceListModal({ onClose }: Props) {
       activeOpacity={0.85}
       onPress={() => handleConnect(item)}
     >
-      <View style={styles.deviceIconBox}>
+      <View style={[styles.deviceIconBox, { backgroundColor: item.type === 'classic' ? '#1A6B32' : '#0066FF' }]}>
         <BluetoothConnected size={18} color="#fff" strokeWidth={2.5} />
       </View>
       <View style={styles.deviceInfo}>
@@ -106,7 +106,12 @@ export default function DeviceListModal({ onClose }: Props) {
           {item.id}
         </Text>
       </View>
-      <RssiBar rssi={item.rssi} />
+      <View style={{ alignItems: 'flex-end', gap: 4 }}>
+        <View style={[styles.typeBadge, { backgroundColor: item.type === 'classic' ? '#1A6B32' : '#0066FF' }]}>
+          <Text style={styles.typeBadgeText}>{item.type === 'classic' ? 'SPP' : 'BLE'}</Text>
+        </View>
+        <RssiBar rssi={item.rssi} />
+      </View>
     </TouchableOpacity>
   );
 
@@ -176,7 +181,7 @@ export default function DeviceListModal({ onClose }: Props) {
                 <BluetoothSearching size={28} color="#555" strokeWidth={2} />
               </View>
               <Text style={styles.emptyText}>
-                {isScanning ? 'Procurando micro:bits...' : 'Nenhum dispositivo encontrado'}
+                {isScanning ? 'Procurando dispositivos...' : 'Nenhum dispositivo encontrado'}
               </Text>
               {!isScanning && (
                 <TouchableOpacity
@@ -305,7 +310,6 @@ const styles = StyleSheet.create({
   deviceIconBox: {
     width: 40,
     height: 40,
-    backgroundColor: '#0066FF',
     borderWidth: 2,
     borderColor: Colors.dark,
     alignItems: 'center',
@@ -326,6 +330,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#999',
     marginTop: 1,
+  },
+  typeBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderWidth: 1.5,
+    borderColor: Colors.dark,
+  },
+  typeBadgeText: {
+    fontFamily: FontFamily.mono,
+    fontSize: 8,
+    color: '#fff',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   rssiContainer: {
     flexDirection: 'row',
