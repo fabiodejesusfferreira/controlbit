@@ -33,6 +33,14 @@ export const translations = {
         basic_stop: 'PARAR',
         basic_servos: 'SERVOS',
         basic_simulating: 'SIMULANDO',
+        basic_settings_title: 'COMANDOS',
+        basic_settings_up: 'Cima / Frente',
+        basic_settings_down: 'Baixo / Ré',
+        basic_settings_left: 'Esquerda',
+        basic_settings_right: 'Direita',
+        basic_settings_horn: 'Buzina',
+        basic_settings_stop: 'Parar',
+        basic_settings_save: 'SALVAR',
 
         // CustomControl
         custom_header_title: 'CONTROLE COSTUMIZÁVEL',
@@ -120,6 +128,14 @@ export const translations = {
         basic_stop: 'PARAR',
         basic_servos: 'SERVOS',
         basic_simulating: 'SIMULANDO',
+        basic_settings_title: 'COMANDOS',
+        basic_settings_up: 'Arriba / Frente',
+        basic_settings_down: 'Abajo / Atrás',
+        basic_settings_left: 'Izquierda',
+        basic_settings_right: 'Derecha',
+        basic_settings_horn: 'Bocina',
+        basic_settings_stop: 'Parar',
+        basic_settings_save: 'GUARDAR',
 
         // CustomControl
         custom_header_title: 'CONTROL PERSONALIZABLE',
@@ -207,6 +223,14 @@ export const translations = {
         basic_stop: 'STOP',
         basic_servos: 'SERVOS',
         basic_simulating: 'SIMULATING',
+        basic_settings_title: 'COMMANDS',
+        basic_settings_up: 'Up / Forward',
+        basic_settings_down: 'Down / Reverse',
+        basic_settings_left: 'Left',
+        basic_settings_right: 'Right',
+        basic_settings_horn: 'Horn',
+        basic_settings_stop: 'Stop',
+        basic_settings_save: 'SAVE',
 
         // CustomControl
         custom_header_title: 'CUSTOMIZABLE CONTROL',

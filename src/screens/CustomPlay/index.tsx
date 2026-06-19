@@ -15,13 +15,14 @@ import {
   Activity,
   StopCircle,
 } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { ControlButton, ControlProfile } from '../../types/control.types';
 import { CommandStorage } from '../../services/storage';
 import { useBluetooth } from '../../context/BluetoothContext';
 import DraggableButton from '../../components/DraggableButton';
 import BluetoothStatusButton from '../../components/BluetoothButton';
 import { Colors, FontFamily } from '../../constants/theme';
+import { RootStackParamList } from '../../types/root-param-list';
 import { RootStackNavigationProp } from '../../types/navigation.types';
 import { useScreenOrientation } from '../../hooks/useScreenOrientation';
 import { useLanguage } from '../../context/LanguageContext';
@@ -29,13 +30,14 @@ import MobileRotateIcon from '../../components/icons/MobileRotateIcon';
 
 export default function CustomPlay() {
   const navigation = useNavigation<RootStackNavigationProp>();
+  const route = useRoute<RouteProp<RootStackParamList, 'customplay'>>();
   const insets = useSafeAreaInsets();
   const { sendCommand, isConnected } = useBluetooth();
   const { t } = useLanguage();
 
-  // Inicia com a orientação do perfil (portrait por default,
-  // ajustado depois do load)
-  const { orientation, toggle, isLandscape, set } = useScreenOrientation('portrait');
+  const initialOrientation = route.params?.initialOrientation || 'portrait';
+  // Inicia com a orientação passada por param (da tela anterior) ou portrait
+  const { orientation, toggle, isLandscape, set } = useScreenOrientation(initialOrientation);
 
   const [profile, setProfile] = useState<ControlProfile | null>(null);
   const [buttons, setButtons] = useState<ControlButton[]>([]);
@@ -50,11 +52,11 @@ export default function CustomPlay() {
     const active = await CommandStorage.getActiveProfile(t);
     setProfile(active);
     setButtons(active.buttons.map((b) => ({ ...b })));
-    // Aplica orientação salva no perfil
-    if (active.orientation) {
+    // Aplica orientação salva no perfil se não veio de parâmetro
+    if (active.orientation && !route.params?.initialOrientation) {
       set(active.orientation);
     }
-  }, [set]);
+  }, [set, route.params?.initialOrientation]);
 
   useEffect(() => { loadProfile(); }, [loadProfile]);
 
@@ -66,7 +68,8 @@ export default function CustomPlay() {
 
   const handleRelease = useCallback(() => {
     setActiveCmd('');
-  }, []);
+    sendCommand('stop');
+  }, [sendCommand]);
 
   const handleStop = useCallback(() => {
     // Animação de press no botão stop
@@ -78,6 +81,13 @@ export default function CustomPlay() {
     sendCommand('stop');
     setTimeout(() => setActiveCmd(''), 300);
   }, [sendCommand, stopAnim]);
+
+  const handleGoBack = useCallback(() => {
+    if (route.params?.onReturn) {
+      route.params.onReturn(isLandscape ? 'landscape' : 'portrait');
+    }
+    navigation.goBack();
+  }, [navigation, route.params, isLandscape]);
 
   const onCanvasLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -110,7 +120,7 @@ export default function CustomPlay() {
             <View style={styles.fabShadowAbs} />
             <TouchableOpacity
               style={styles.backBtn}
-              onPress={() => navigation.goBack()}
+              onPress={handleGoBack}
               activeOpacity={0.8}
             >
               <ArrowLeft size={18} color={Colors.dark} strokeWidth={3} />
@@ -129,7 +139,7 @@ export default function CustomPlay() {
             <View style={styles.fabShadowAbs} />
             <TouchableOpacity
               style={[styles.headerIconBtn, { backgroundColor: '#1C37B5' }]}
-              onPress={() => navigation.goBack()}
+              onPress={handleGoBack}
               activeOpacity={0.8}
             >
               <Pencil size={16} color="#fff" strokeWidth={2.5} />
@@ -198,7 +208,7 @@ export default function CustomPlay() {
           {/* No landscape: botão de editar e BT também viram FABs */}
           {isLandscape && (
             <>
-              <PlayFAB onPress={() => navigation.goBack()} bg="#FFD82D">
+              <PlayFAB onPress={handleGoBack} bg="#FFD82D">
                 <Pencil size={16} color={Colors.dark} strokeWidth={2.5} />
               </PlayFAB>
             </>

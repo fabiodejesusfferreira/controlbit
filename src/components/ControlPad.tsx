@@ -16,9 +16,13 @@ import Animated, {
 import { Colors } from '../constants/theme';
 import DottedBackground from './DottedBackground';
 
+import { BasicCommands } from '../services/basicCommandStorage';
+
 interface Props {
+  commands: BasicCommands;
   onCommand: (cmd: string) => void;
   onStop: () => void;
+  buttonSize?: number;
 }
 
 type Direction = 'up' | 'down' | 'left' | 'right' | 'center';
@@ -32,6 +36,7 @@ interface DPadButtonProps {
   shadowOffset?: number;
   onStart: (cmd: string) => void;
   onEnd: () => void;
+  size?: number;
 }
 
 const BORDER_RADIUS: Record<Direction, object> = {
@@ -73,6 +78,7 @@ function DPadButton({
   shadowOffset = 4,
   onStart,
   onEnd,
+  size = 102,
 }: DPadButtonProps) {
   const pressed = useSharedValue(0);
   const [isActive, setIsActive] = useState(false);
@@ -103,7 +109,7 @@ function DPadButton({
   };
 
   const radiusStyle = BORDER_RADIUS[dir];
-  const SIZE = dir === 'center' ? 102 : 102;
+  const SIZE = size;
 
   return (
     // Container relativo — igual ao NeoButton
@@ -166,7 +172,7 @@ function DPadButton({
   );
 }
 
-export default function ControlPad({ onCommand, onStop }: Props) {
+export default function ControlPad({ commands, onCommand, onStop, buttonSize = 102 }: Props) {
   const [active, setActive] = useState<string | null>(null);
 
   const handleStart = (cmd: string) => {
@@ -175,13 +181,13 @@ export default function ControlPad({ onCommand, onStop }: Props) {
   };
 
   const handleEnd = () => {
-    if (active && active !== 'horn') {
+    if (active && active !== commands.horn) {
       onStop();
     }
     setActive(null);
   };
 
-  const iconSize = 44
+  const iconSize = buttonSize * (44 / 102);
 
   return (
     <DottedBackground style={{ width: "100%", paddingVertical: 12 }}>
@@ -190,7 +196,8 @@ export default function ControlPad({ onCommand, onStop }: Props) {
         {/* Up */}
         <DPadButton
           dir="up"
-          command="up"
+          size={buttonSize}
+          command={commands.up}
           icon={<ArrowUp size={iconSize} />}
           onStart={handleStart}
           onEnd={handleEnd}
@@ -202,7 +209,8 @@ export default function ControlPad({ onCommand, onStop }: Props) {
           {/* Left */}
           <DPadButton
             dir="left"
-            command="left"
+            size={buttonSize}
+            command={commands.left}
             icon={<ArrowLeft size={iconSize} />}
             onStart={handleStart}
             onEnd={handleEnd}
@@ -211,7 +219,8 @@ export default function ControlPad({ onCommand, onStop }: Props) {
           {/* Center — Horn */}
           <DPadButton
             dir="center"
-            command="horn"
+            size={buttonSize}
+            command={commands.horn}
             bgColor="#E81C1C"
             activeBgColor="#C01010"
             icon={<Star size={iconSize} fill="#fff" color="#fff" strokeWidth={2} />}
@@ -222,7 +231,8 @@ export default function ControlPad({ onCommand, onStop }: Props) {
           {/* Right */}
           <DPadButton
             dir="right"
-            command="right"
+            size={buttonSize}
+            command={commands.right}
             icon={<ArrowRight size={iconSize} />}
             onStart={handleStart}
             onEnd={handleEnd}
@@ -233,7 +243,8 @@ export default function ControlPad({ onCommand, onStop }: Props) {
         {/* Down */}
         <DPadButton
           dir="down"
-          command="down"
+          size={buttonSize}
+          command={commands.down}
           icon={<ArrowDown size={iconSize} />}
           onStart={handleStart}
           onEnd={handleEnd}

@@ -27,6 +27,7 @@ import ProfilePickerModal from '../../components/ProfilePickerModal';
 import BluetoothStatusButton from '../../components/BluetoothButton';
 import ButtonFormPanel from './ButtonFormPanel';
 import { Colors, FontFamily } from '../../constants/theme';
+import { RootStackParamList } from '../../types/root-param-list';
 import { RootStackNavigationProp } from '../../types/navigation.types';
 import { useScreenOrientation } from '../../hooks/useScreenOrientation';
 import { useLanguage } from '../../context/LanguageContext';
@@ -38,7 +39,7 @@ export default function CustomControl() {
   const { t } = useLanguage();
 
   // ── Orientação ──────────────────────────────────────────────────────────────
-  const { orientation, toggle, isLandscape } = useScreenOrientation('portrait');
+  const { orientation, toggle, isLandscape, set } = useScreenOrientation('portrait');
 
   // ── Ocultar bottom tabs no landscape ────────────────────────────────────────
   useEffect(() => {
@@ -187,12 +188,17 @@ export default function CustomControl() {
     Animated.timing(fadeAnim, {
       toValue: 1, duration: 220, useNativeDriver: true,
     }).start(() => {
-      navigation.navigate('customplay');
+      navigation.navigate('customplay', {
+        initialOrientation: isLandscape ? 'landscape' : 'portrait',
+        onReturn: (newOrientation) => {
+          set(newOrientation);
+        }
+      });
       setTimeout(() => {
         fadeAnim.setValue(0);
       }, 500);
     });
-  }, [handleSave, navigation, fadeAnim]);
+  }, [handleSave, navigation, fadeAnim, isLandscape, set]);
 
   const focusedButton = buttons.find((b) => b.id === focusedId);
 
@@ -584,12 +590,12 @@ const styles = StyleSheet.create({
   },
   profilePrefix: {
     fontFamily: FontFamily.monoBold,
-    fontSize: 10,
+    fontSize: 12,
     color: '#FFD82D',
   },
   profileName: {
     fontFamily: FontFamily.title,
-    fontSize: 10,
+    fontSize: 12,
     color: '#fff',
     maxWidth: 140,
   },

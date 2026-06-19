@@ -13,6 +13,8 @@ export type TabParamList = {
 export type RootStackParamList = {
   tabs: undefined;
   basiccontrol: undefined;
-  customcontrol: undefined;
-  customplay: undefined;
+  customplay: {
+    initialOrientation?: 'portrait' | 'landscape';
+    onReturn?: (orientation: 'portrait' | 'landscape') => void;
+  } | undefined;
 };

@@ -12,6 +12,10 @@ import {
   Alert,
   ScrollView,
   useWindowDimensions,
+  KeyboardAvoidingView,
+  Keyboard,
+  EmitterSubscription,
+  Platform,
 } from 'react-native';
 import { X, Plus, Trash2, Check, Lock } from 'lucide-react-native';
 import { ControlProfile } from '../types/control.types';
@@ -125,6 +129,31 @@ export default function ProfilePickerModal({
   const slideAnim = useRef(new Animated.Value(500)).current;
   const inputRef  = useRef<TextInput>(null);
 
+  // --- FIX: tracking manual do teclado no Android ---
+  // Dentro de um Modal, o Android renderiza uma janela/Dialog nativa separada
+  // que não respeita o windowSoftInputMode da Activity, então o cálculo do
+  // KeyboardAvoidingView (baseado em onLayout) fica errado ou atrasado ali.
+  // Por isso, no Android, escutamos os eventos de teclado nós mesmos e
+  // empurramos a sheet pela altura exata do teclado.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const showSub: EmitterSubscription = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub: EmitterSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+  // --- end fix ---
+
   // Animação de entrada — só uma vez
   useEffect(() => {
     Animated.timing(slideAnim, {
@@ -201,14 +230,22 @@ export default function ProfilePickerModal({
         activeOpacity={1}
         onPress={onClose}
       >
-        {/* Bloco vazio para não propagar toque para o sheet */}
-        <Animated.View
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={[
-            styles.sheet,
-            { transform: [{ translateY: slideAnim }] },
-            isLandscape && { maxHeight: '95%' },
+            styles.kav,
+            // No Android fazemos o "levantamento" manualmente em vez de confiar no KAV
+            Platform.OS === 'android' && { marginBottom: keyboardHeight },
           ]}
         >
+          {/* Bloco vazio para não propagar toque para o sheet */}
+          <Animated.View
+            style={[
+              styles.sheet,
+              { transform: [{ translateY: slideAnim }] },
+              isLandscape && { maxHeight: '95%' },
+            ]}
+          >
           {/* Impede que toque no sheet feche o modal */}
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
             <ScrollView
@@ -343,7 +380,8 @@ export default function ProfilePickerModal({
 
             </ScrollView>
           </TouchableOpacity>
-        </Animated.View>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </TouchableOpacity>
     </Modal>
   );
@@ -355,6 +393,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
   },
+  kav: {
+    width: '100%',
+    justifyContent: 'flex-end',
+  },
   sheet: {
     backgroundColor: Colors.bg,
     borderWidth: 3,
@@ -363,7 +405,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     paddingBottom: 36,
-    maxHeight: '80%',
+    maxHeight: '100%',
   },
   header: {
     flexDirection: 'row',

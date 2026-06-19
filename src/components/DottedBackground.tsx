@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ViewProps } from 'react-native';
+import { View, ViewProps, useWindowDimensions } from 'react-native';
 import Svg, { Pattern, Rect, Circle } from 'react-native-svg';
 
 // Tipagem para aceitar os filhos (children) e outras props padrão de View
@@ -8,12 +8,14 @@ interface DottedBackgroundProps extends ViewProps {
 }
 
 export default function DottedBackground({ children, className, ...rest }: DottedBackgroundProps) {
+  const { width, height } = useWindowDimensions();
+
   return (
     // Fundo creme aplicado como base. Recebe className extra se você quiser sobrescrever algo.
     <View className={`flex-1 bg-[#F5F4EC] ${className || ''}`} {...rest}>
       
       {/* Camada do SVG posicionada no fundo absoluto. pointer-events-none garante que o fundo não bloqueie cliques */}
-      <View className="absolute inset-0 pointer-events-none">
+      <View className="absolute inset-0 pointer-events-none" key={`${width}-${height}`}>
         <Svg height="100%" width="100%">
           <Pattern 
             id="dots" 
